@@ -1,13 +1,13 @@
 from __future__ import annotations
 from dataclasses import dataclass
-from datetime import date
 from typing import Any
+
+from common.model.daily_basis_model import DailyBasisModel
 
 
 @dataclass
-class Ohlc:
+class Ohlc(DailyBasisModel):
     ticker: str
-    date: date
     open: float
     high: float
     low: float
@@ -29,7 +29,7 @@ class Ohlc:
     def to_dict(self) -> dict:
         return {
             "ticker": self.ticker,
-            "date": self.date,
+            "date": self.date.isoformat(),
             "open": self.open,
             "high": self.high,
             "low": self.low,

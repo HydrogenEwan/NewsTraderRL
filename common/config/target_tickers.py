@@ -1,0 +1,1 @@
+TARGET_TICKERS = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA']
