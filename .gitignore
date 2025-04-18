@@ -172,3 +172,14 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+# VS Code settings
+.vscode/
+
+#  JetBrains IDE
+.idea/
+*.iml
+*.xml
+*.ipr
+*.iws
+*.ide-workspace

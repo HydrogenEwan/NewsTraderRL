@@ -1,0 +1,5 @@
+MONGODB_URI = "mongodb://localhost:27017"
+MONGODB_DB_NAME = "newstraderrl"
+MONGODB_COLLECTION_NEWS = "news"
+MONGODB_COLLECTION_OHLC = "ohlc"
+MONGODB_COLLECTION_SIMULATION = "simulation"
