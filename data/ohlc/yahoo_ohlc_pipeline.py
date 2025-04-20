@@ -51,8 +51,8 @@ if __name__ == "__main__":
     # test for simulation pipeline
     pipeline.run_simulation_pipeline(
         ticker="AAPL",
-        start="2024-01-01",
-        end="2024-01-03",
+        start="2024-01-05",
+        end="2024-01-06",
         batch_size=100
     )
 

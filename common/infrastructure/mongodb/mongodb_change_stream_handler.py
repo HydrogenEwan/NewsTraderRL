@@ -23,5 +23,3 @@ class MongoDbChangeStreamHandler(ChangeStreamHandler, ABC):
         op_type = change.get("operationType")
         if op_type == "insert":
             self.on_insert(change)
-        elif op_type == "update":
-            self.on_update(change)

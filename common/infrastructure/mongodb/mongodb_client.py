@@ -59,3 +59,11 @@ class MongoDbClient:
         except Exception as e:
             print(f"[MongoDbClient] delete_many failed: {e}")
             return 0
+
+    def count_documents(self, collection_name: str, filter: dict) -> int:
+        collection = self.get_collection(collection_name)
+        try:
+            return collection.count_documents(filter)
+        except Exception as e:
+            print(f"[MongoDbClient] count_documents failed: {e}")
+            return 0
