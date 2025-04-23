@@ -4,3 +4,7 @@ yfinance>=0.2.55
 pandas>=2.2.3
 click>=8.1.8
 finnhub-python==2.4.23
+
+# sec data. Use latest version to avoid API fetching errors.
+git+https://github.com/sec-edgar/sec-edgar.git@master
+bs4
