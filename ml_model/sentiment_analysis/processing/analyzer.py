@@ -1,10 +1,13 @@
 import numpy as np
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from config import CONFIG
 from model_manager import ModelManager
 from processing.chunker import chunk_text
 from processing.surprisal import calc_surprisal
 from processing.ner_extractor import extract_companies
+
+_tokenizer_lock = threading.Lock()
 
 def process_chunk(chunk: str) -> dict:
     sent_pipe = ModelManager.get_model("sentiment")
@@ -24,7 +27,7 @@ def process_chunk(chunk: str) -> dict:
     elif res_f["label"] == "Negative":
         sent_score = -res_f["score"]
     else:
-        sent_score = res_f["score"] * 0.2
+        sent_score = 0
 
     res_fake = fake_pipe(chunk)[0]
     real_score = res_fake["score"] if res_fake["label"] == "LABEL_1" else 1 - res_fake["score"]
