@@ -196,4 +196,5 @@ Thumbs.db
 # Dataset files
 data/financial_news/csv/*.csv
 data/financial_news/csv/*.csv.gz
-data/financial_news/csv/historical_news/*.json
+data/financial_news/csv/historical_news/*.json.env
+data/financial_news/csv/simulation_api_news/*.json
