@@ -19,6 +19,7 @@ class SecData(DailyBasisModel):
     datetime: int # timestamp
     text: str
     ticker: str
+    date: str
 
     def to_dict(self) -> dict:
         """Convert SecData object to dictionary format.
