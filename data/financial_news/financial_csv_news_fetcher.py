@@ -12,8 +12,13 @@ class FinancialCsvNewsFetcher(DataFetcher):
         self.ticker = ticker
 
     def fetch(self, start: str, end: str) -> Iterator[FinancialNews]:
-        # read CSV file
-        df = pd.read_csv(self.csv_path)
+        # read CSV file with proper quoting
+        df = pd.read_csv(
+            self.csv_path,
+            quoting=1,  # QUOTE_ALL
+            escapechar='\\',
+            encoding='utf-8'
+        )
         
         # convert datetime string to timestamp
         df['datetime'] = pd.to_datetime(df['datetime']).astype('int64') // 10**9
