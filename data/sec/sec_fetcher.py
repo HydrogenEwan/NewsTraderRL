@@ -89,7 +89,7 @@ class SecFetcher(DataFetcher):
             int: Timestamp of the filing
         """
         # Parse the raw text as XML using BeautifulSoup
-        soup = BeautifulSoup(raw_text, 'xml')
+        soup = BeautifulSoup(raw_text, features='xml')
         unix_ts = None
         acceptance_tag = soup.find("ACCEPTANCE-DATETIME")
         if acceptance_tag:

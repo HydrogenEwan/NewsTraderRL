@@ -7,7 +7,6 @@ from data.sec.sec_parser import SecParser
 TICKERS = ["AAPL", "GOOG", "MSFT"] # TODO: change it to actual
 # TODO:Should we include the db credential to env
 # TODO: Fixed ticker? or should we fetch with some ticker
-# TODO: Should parser return to_dict, so it can be pushed to mongoDB?
 class SecPipeline(DataPipeline):
     """
     A pipeline for fetching and processing SEC filings data.
@@ -31,7 +30,7 @@ class SecPipeline(DataPipeline):
         self.parser = SecParser()
         self.fetcher = SecFetcher(self.parser, TICKERS)
         self.collection = "sec_data"
-        self.dummy = "simulation"
+        self.dummy = "sec_test"
 
     def run_historical_pipeline(
         self,
