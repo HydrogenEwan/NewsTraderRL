@@ -16,18 +16,33 @@ DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True) # Ensure the directory exists
 
 class SecFetcher(DataFetcher):
     '''Class for fetching SEC data'''
-    def __init__(self, parser: DataParser, ticker: str):
+    def __init__(self, parser: DataParser, tickers: list[str]):
         '''Input: 
          - parser: DataParser object, for parsing SEC 10Q data
-         - ticker: str, the ticker of the company whose data we are fetching
+         - tickers: list[str], the tickers of the companies whose data we are fetching
          '''
         # TODO:
         # Assume the ticker is fixed throughout this project
         self.parser = parser
-        self.ticker = ticker
+        self.tickers = tickers
 
-    def fetch(self, start: str, end: str) -> Iterator:
-        my_filings = filings(cik_lookup=[self.ticker],
+    def fetch(self, start: str, end: str, tickers: list[str] = None) -> Iterator:
+        """Fetch SEC 10-Q filings for the specified tickers and date range.
+
+        Args:
+            start (str): Start date in YYYY-MM-DD format
+            end (str): End date in YYYY-MM-DD format
+
+        Yields:
+            Iterator: Parsed SEC filing data objects containing:
+                - id: Unique UUID for the filing
+                - ticker: Company ticker symbol
+                - text: Cleaned filing text content
+                - datetime: Unix timestamp of filing
+        """
+        if tickers is None:
+            tickers = self.tickers
+        my_filings = filings(cik_lookup=tickers,
                         filing_type=FilingType.FILING_10Q,
                         user_agent="Your name (123@gmail.com)",
                         start_date=start,

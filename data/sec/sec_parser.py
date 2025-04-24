@@ -26,4 +26,5 @@ class SecParser(DataParser):
         """
 
         # Store the cleaned text back in raw for further processing
-        return SecData.from_raw(data)
+        # check schema and return as a dictionary
+        return SecData.from_raw(data).to_dict()
