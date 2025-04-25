@@ -3,8 +3,6 @@ import threading
 from model_manager import ModelManager
 from config import CONFIG
 
-_tokenizer_lock = threading.Lock()
-
 def calc_surprisal(text: str) -> float:
     tok = ModelManager.get_tokenizer("gpt2")
     mdl = ModelManager.get_model("gpt2")

@@ -52,38 +52,48 @@ if __name__ == "__main__":
         },
     ]
 
-    # 先对每条新闻做分析
-    records = []
+    items = []
     for item in example_batch:
         analysis = process_text(item["text"])
-        score = analysis["overall_score"]
-        records.append({
-            "date": item["date"],
-            "ticker": item["ticker"],
-            "score": score
+        sentiments = analysis.get("sentiments", [])
+        sentiment = float(sum(sentiments) / len(sentiments)) if sentiments else 0.0
+        filtered = {
+            "sentiment": sentiment,
+            "realness": analysis.get("realness", 0.5),
+            "information": analysis.get("information", 0.0),
+            "ticker": item["ticker"]
+        }
+        items.append({
+            "input": item,
+            "analysis": filtered
         })
 
-    # 按 date -> ticker 收集分数列表
     date_ticker_scores = defaultdict(lambda: defaultdict(list))
-    for rec in records:
-        date_ticker_scores[rec["date"]][rec["ticker"]].append(rec["score"])
+    for entry in items:
+        date = entry["input"]["date"]
+        ticker = entry["analysis"]["ticker"]
+        score = entry["analysis"]["sentiment"]
+        date_ticker_scores[date][ticker].append(score)
 
-    # 计算 avg_score 和 label
     date_results = {}
     for date, tk_dict in date_ticker_scores.items():
         agg = {}
         for tkr, scores in tk_dict.items():
-            avg = sum(scores) / len(scores)
+            avg = float(sum(scores) / len(scores))
             agg[tkr] = {
                 "avg_score": avg,
                 "label": score_to_label(avg)
             }
         date_results[date] = agg
 
-    # 写到本地 JSON
-    with open("analysis_by_date.json", "w", encoding="utf-8") as f:
-        json.dump({"date_results": date_results}, f, ensure_ascii=False, indent=2)
+    output = {
+        "items": items,
+        "date_results": date_results
+    }
 
-    # 控制台输出
-    print(json.dumps({"date_results": date_results}, ensure_ascii=False, indent=2))
-    logger.info("Date-level analysis written to analysis_by_date.json")
+    print(json.dumps(output, ensure_ascii=False, indent=2))
+
+    with open("analysis_full_output.json", "w", encoding="utf-8") as f:
+        json.dump(output, f, ensure_ascii=False, indent=2)
+
+    logger.info("Full analysis written to analysis_full_output.json")

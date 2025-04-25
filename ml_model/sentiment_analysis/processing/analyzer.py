@@ -5,9 +5,6 @@ from config import CONFIG
 from model_manager import ModelManager
 from processing.chunker import chunk_text
 from processing.surprisal import calc_surprisal
-from processing.ner_extractor import extract_companies
-
-_tokenizer_lock = threading.Lock()
 
 def process_chunk(chunk: str) -> dict:
     sent_pipe = ModelManager.get_model("sentiment")
@@ -32,13 +29,11 @@ def process_chunk(chunk: str) -> dict:
     res_fake = fake_pipe(chunk)[0]
     real_score = res_fake["score"] if res_fake["label"] == "LABEL_1" else 1 - res_fake["score"]
     info_score = calc_surprisal(chunk)
-    companies = extract_companies(chunk)
 
     return {
         "sentiment": float(sent_score),
         "realness": float(real_score),
         "information": float(info_score),
-        "companies": companies,
         "text": chunk,
     }
 
@@ -61,13 +56,10 @@ def process_text(text: str) -> dict:
     else:
         overall = float(np.mean(sentiments)) if sentiments else 0.0
 
-    all_companies = [c for r in results for c in r["companies"]]
-
     return {
         "overall_score": overall,
         "sentiments": sentiments,
         "realness": float(np.mean(realness)) if realness else 0.5,
         "information": float(np.sum(information)),
-        "companies": all_companies,
         "chunks": len(chunks),
     }
