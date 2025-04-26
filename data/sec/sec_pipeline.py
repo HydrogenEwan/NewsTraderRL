@@ -1,10 +1,10 @@
 from common.interface.data_pipeline import DataPipeline
 from common.model.simulation import SimulationItem
-from common.config.db_config import MONGODB_COLLECTION_NEWS
+from common.config.target_tickers import TARGET_TICKERS
 from data.sec.sec_fetcher import SecFetcher
 from data.sec.sec_parser import SecParser
 
-TICKERS = ["AAPL", "GOOG", "MSFT"] # TODO: change it to actual
+
 # TODO:Should we include the db credential to env
 # TODO: Fixed ticker? or should we fetch with some ticker
 class SecPipeline(DataPipeline):
@@ -28,7 +28,7 @@ class SecPipeline(DataPipeline):
     def __init__(self):
         super().__init__()
         self.parser = SecParser()
-        self.fetcher = SecFetcher(self.parser, TICKERS)
+        self.fetcher = SecFetcher(self.parser, TARGET_TICKERS)
         self.collection = "sec_data"
         self.dummy = "sec_test"
 
