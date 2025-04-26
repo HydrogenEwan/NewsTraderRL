@@ -54,6 +54,19 @@ class MlModelHelper:
     #     for doc in docs:
     #         return doc.get("sec", None)
 
+    def get_aggregate_turnover(self, date: str) -> float:
+        client = self.mongodb
+        pipeline = [
+            {"$match": {"date": date}},
+            {"$group": {"_id": None, "turnover": {"$sum": {"$multiply": ["$volume", "$close"]}}}},
+            {"$project": {"_id": 0, "turnover": 1}}
+        ]
+        result = client.aggregate("ohlc", pipeline)
+        if result and len(result) > 0:
+            # 첫 번째 문서의 turnover 값을 반환
+            return float(result[0].get("turnover", 0.0))
+        return 0.0
+
     def listen_end_of_day_for_sentiment(self, callback):
         self.kafka.listen(KAFKA_SENTIMENT_ENDOFDAY_TOPIC, callback)
 
@@ -90,6 +103,7 @@ if __name__ == "__main__":
     print("OHLC TEST ==================================")
     ohlc = ml_helper.get_ohlc("MMM", "2009-10-01")
     print(f"[OHLC] {ohlc}")
+    print(f"[TURNOVER] {ml_helper.get_aggregate_turnover('2009-10-01')}")
 
     print("\nNEWS TEST ==================================")
     news = ml_helper.get_financial_news("UPS", "2009-12-30")
