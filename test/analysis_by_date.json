@@ -1,0 +1,69 @@
+{ //just example input 
+  "input": {
+    {
+      "date": "2025-04-20",
+      "ticker": "TSLA",
+      "text": "Tesla reports record first-quarter deliveries of 435,000 vehicles, beating analyst estimates and driving shares up 7% after hours."
+    },
+    {
+      "date": "2025-04-23",
+      "ticker": "AAPL",
+      "text": "Apple reported record iPhone sales in Greater China."
+    },
+    {
+      "date": "2025-04-19",
+      "ticker": "FED",
+      "text": "Federal Reserve chair Jerome Powell indicates that interest rate cuts could be appropriate later this year if economic data supports easing."
+    },
+    {
+      "date": "2025-04-19",
+      "ticker": "GOOGL",
+      "text": "Google unveils new AI-powered search features at its annual I/O conference, promising more personalized and context-aware results for users worldwide."
+    },
+    {
+      "date": "2025-04-19",
+      "ticker": "AMZN",
+      "text": "Amazon announces plans to open a new fulfillment center in Columbus, Ohio, creating over 2,500 full-time jobs ahead of the holiday shopping season."
+    },
+    {
+      "date": "2025-04-19",
+      "ticker": "BP",
+      "text": "BP reports a 15% decline in first-quarter profits due to rising operational costs and lower oil prices, although revenue exceeded analyst expectations."
+    }
+  }
+}
+
+{
+  "date_results": {
+    "2025-04-20": {
+      "TSLA": {
+        "avg_score": 1.0, // for shin's part
+        "label": "Positive" // for frontend part if possible
+      }
+    },
+    "2025-04-23": {
+      "AAPL": {
+        "avg_score": 1.0,
+        "label": "Positive"
+      }
+    },
+    "2025-04-19": {
+      "FED": {
+        "avg_score": 0.0,
+        "label": "Neutral"
+      },
+      "GOOGL": {
+        "avg_score": 0.9999853372573853,
+        "label": "Positive"
+      },
+      "AMZN": {
+        "avg_score": 0.0,
+        "label": "Neutral"
+      },
+      "BP": {
+        "avg_score": -0.9999897480010986,
+        "label": "Negative"
+      }
+    }
+  }
+}

@@ -23,7 +23,7 @@ class FinancialNews(DailyBasisModel):
             "headline": self.headline,
             "summary": self.summary,
             "ticker": self.ticker,
-            "date": self.date.isoformat()
+            "date": self.date.strftime("%Y-%m-%d"),
         }
 
     @staticmethod
