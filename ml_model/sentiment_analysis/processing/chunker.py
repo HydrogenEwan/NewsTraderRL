@@ -1,5 +1,5 @@
-from model_manager import ModelManager
-from config import CONFIG
+from ml_model.sentiment_analysis.model_manager import ModelManager
+from ml_model.sentiment_analysis.config import CONFIG
 
 def get_max_token_length() -> int:
     toks = [
