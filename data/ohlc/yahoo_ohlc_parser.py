@@ -7,7 +7,7 @@ class YahooOhlcParser(DataParser):
     def __init__(self, ticker: str):
         self.ticker = ticker
 
-    def parse(self, row: pd.Series) -> Ohlc:
+    def parse(self, row: pd.Series, marketcap: float) -> Ohlc:
         return Ohlc(
             ticker=self.ticker,
             date=row["Date"].to_pydatetime(),
@@ -15,5 +15,6 @@ class YahooOhlcParser(DataParser):
             high=float(row["High"]),
             low=float(row["Low"]),
             close=float(row["Close"]),
-            volume=int(row["Volume"])
+            volume=int(row["Volume"]),
+            marketcap=float(marketcap)
         )

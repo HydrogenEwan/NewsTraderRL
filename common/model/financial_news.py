@@ -2,51 +2,51 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional
 from datetime import datetime, date
+import hashlib
 
 from common.model.daily_basis_model import DailyBasisModel
 
 
 @dataclass
 class FinancialNews(DailyBasisModel):
-    id: int
-    category: str
+    id: str
     datetime: int
     headline: str
-    image: Optional[str]
-    related: str
-    source: str
     summary: Optional[str]
-    url: str
     ticker: str
+    date: date
 
     def to_dict(self) -> dict:
         return {
             "id": self.id,
-            "category": self.category,
             "datetime": self.datetime,
-            "date": self.date.isoformat(),
             "headline": self.headline,
-            "image": self.image,
-            "related": self.related,
-            "source": self.source,
             "summary": self.summary,
-            "url": self.url,
-            "ticker": self.ticker
+            "ticker": self.ticker,
+            "date": self.date.strftime("%Y-%m-%d"),
         }
 
     @staticmethod
-    def from_raw(item: dict) -> FinancialNews:
-        ts = item["datetime"]
+    def from_raw(item: dict) -> Optional[FinancialNews]:
+        ts = item.get("datetime", 0)
+        if not ts:
+            return None  # Discard news without valid datetime
+
+        headline = item.get("headline", "")
+        ticker = item.get("symbol", item.get("ticker", ""))
+        
+        # generate news id based on news content
+        content = f"{headline}|{ts}|{ticker}".encode('utf-8')
+        news_id = hashlib.md5(content).hexdigest()
+
+        # create date object from timestamp
+        news_date = datetime.fromtimestamp(ts).date()
+
         return FinancialNews(
-            id=item["id"],
-            category=item["category"],
+            id=news_id,
             datetime=ts,
-            date=datetime.fromtimestamp(ts).date(),
-            headline=item["headline"],
-            image=item.get("image"),
-            related=item["related"],
-            source=item["source"],
+            headline=item.get("headline", ""),
             summary=item.get("summary"),
-            url=item["url"],
-            ticker=item["ticker"]
+            ticker=item.get("symbol", item.get("ticker", "")),
+            date=news_date  # add date parameter
         )

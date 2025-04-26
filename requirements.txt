@@ -1,7 +1,16 @@
+matplotlib==3.10.1
+numpy==2.2.5
+pandas==2.2.3
+python-dotenv==1.1.0
+Requests==2.32.3
+seaborn==0.13.2
+torch==2.7.0
+tqdm==4.67.1
+transformers==4.51.3
+
 pymongo>=4.12.0
 Flask>=2.3.3
 yfinance>=0.2.55
-pandas>=2.2.3
 click>=8.1.8
 finnhub-python==2.4.23
 
@@ -9,3 +18,5 @@ finnhub-python==2.4.23
 git+https://github.com/sec-edgar/sec-edgar.git@master
 bs4
 lxml
+kafka-python>=2.1.5
+kafka-python>=2.1.5

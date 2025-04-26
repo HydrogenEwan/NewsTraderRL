@@ -191,3 +191,19 @@ cython_debug/
 *.iws
 *.ide-workspace
 
+# macOS system files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Dataset files
+data/financial_news/csv/*.csv
+data/financial_news/csv/*.csv.gz
+data/financial_news/csv/historical_news/*.json.env
+data/financial_news/csv/simulation_api_news/*.json
+ml_model/model1/data/
+ml_model/model1/outputs/

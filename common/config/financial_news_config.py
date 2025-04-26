@@ -1,1 +1,1 @@
-FINNHUB_API_KEY = ""
+FINNHUB_API_KEY = "d033oe1r01qm9cbdorj0d033oe1r01qm9cbdorjg"
