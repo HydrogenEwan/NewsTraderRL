@@ -18,5 +18,6 @@ finnhub-python==2.4.23
 git+https://github.com/sec-edgar/sec-edgar.git@master
 bs4
 lxml
-kafka-python>=2.1.5
+
+# kafka
 kafka-python>=2.1.5
