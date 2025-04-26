@@ -1,6 +1,6 @@
 from pymongo import MongoClient
 from pymongo.collection import Collection
-from typing import Union, List, Dict, Optional
+from typing import Union, List, Dict, Optional, Any
 from common.config import db_config
 
 
@@ -67,3 +67,18 @@ class MongoDbClient:
         except Exception as e:
             print(f"[MongoDbClient] count_documents failed: {e}")
             return 0
+
+    def aggregate(
+        self,
+        collection_name: str,
+        pipeline: List[Dict[str, Any]],
+        allow_disk_use: bool = False
+    ) -> Optional[List[Dict[str, Any]]]:
+
+        collection = self.get_collection(collection_name)
+        try:
+            cursor = collection.aggregate(pipeline, allowDiskUse=allow_disk_use)
+            return list(cursor)
+        except Exception as e:
+            print(f"[MongoDbClient] aggregate failed: {e}")
+            return None
