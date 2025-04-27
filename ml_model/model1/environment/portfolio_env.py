@@ -26,7 +26,6 @@ EPS = 1e-20
 class DataGenerator():
     def __init__(self,
                  assets_data,
-                 rtns_data,
                  market_data,
                  in_features,
                  val_idx,
@@ -57,7 +56,6 @@ class DataGenerator():
         self.allow_short = allow_short
 
         self.__org_assets_data = assets_data.copy()[:, :, :in_features[0]]
-        self.__ror_data = rtns_data
         # ==== input type ====
         self.__assets_data = self.__org_assets_data.copy()
         if allow_short:
@@ -75,6 +73,28 @@ class DataGenerator():
         self.__sample_p = self.__sample_p / sum(self.__sample_p)
 
         self.step_cnt = 0
+
+    def _calculate_returns(self, prices):
+        """
+        Calculate returns from price data using vectorized operations.
+        
+        Args:
+            prices: Array of shape (num_stocks, num_days) containing closing prices
+            
+        Returns:
+            Array of shape (num_stocks, num_days) containing returns
+        """
+        # Create shifted prices array (previous day's prices)
+        prices_prev = np.roll(prices, 1, axis=1)
+        prices_prev[:, 0] = prices[:, 0]  # Set first day's previous price same as current
+        
+        # Calculate returns using vectorized operations
+        # Handle division by zero and negative prices
+        mask = (prices > 0) & (prices_prev > 0)
+        returns = np.zeros_like(prices)
+        returns[mask] = (prices[mask] - prices_prev[mask]) / prices_prev[mask]
+        
+        return returns
 
     def _step(self):
 
@@ -175,6 +195,7 @@ class DataGenerator():
             market_states = None
         future_return = np.zeros((len(self.cursor), self.__assets_data.shape[0], self.trade_len))
         past_return = np.zeros((len(self.cursor), self.__assets_data.shape[0], self.window_len))
+        
         for i, idx in enumerate(self.cursor):
             raw_states[i] = self.__assets_data[:, idx - (self.window_len + 1) * 5 + 1:idx + 1, :].copy()
             #tmp_states[:, :, :, :, F] = 0. Close, 1. High, 2. Low, 3. Volume, 4. Market Cap
@@ -209,19 +230,23 @@ class DataGenerator():
                 #Average any features per week of the original market data
                 tmp_states = self.__market_data[idx - (self.window_len) * 5 + 1:idx + 1].reshape(self.window_len, 5, -1)
                 market_states[i] = np.mean(tmp_states, axis=1)
-                
+            
+            # Calculate returns on-the-fly
+            prices = self.__assets_data[:, :, 0]  # Get closing prices
+            returns = self._calculate_returns(prices)
+            
             # Handle future and past returns with bounds checking
-            if idx + 1 < self.__ror_data.shape[-1]:
-                future_return[i] = self.__ror_data[:, idx + 1:min(idx + 1 + self.trade_len, self.__ror_data.shape[-1])]
+            if idx + 1 < returns.shape[1]:
+                future_return[i] = returns[:, idx + 1:min(idx + 1 + self.trade_len, returns.shape[1])]
             else:
                 # If we're at the end of the data, pad with zeros
-                future_return[i] = np.zeros((self.__ror_data.shape[0], self.trade_len))
+                future_return[i] = np.zeros((returns.shape[0], self.trade_len))
                 
             if idx - self.window_len + 1 >= 0:
-                past_return[i] = self.__ror_data[:, idx - self.window_len + 1:idx + 1]
+                past_return[i] = returns[:, idx - self.window_len + 1:idx + 1]
             else:
                 # If we're at the beginning of the data, pad with zeros
-                past_return[i] = np.zeros((self.__ror_data.shape[0], self.window_len))
+                past_return[i] = np.zeros((returns.shape[0], self.window_len))
 
         # Replace any remaining NaN values with zeros
         assets_states = np.nan_to_num(assets_states, nan=0.0, posinf=0.0, neginf=0.0)
@@ -459,7 +484,6 @@ class PortfolioEnv(object):
     def __init__(self,
                  assets_data,
                  market_data,
-                 rtns_data,
                  in_features,
                  val_idx,
                  test_idx,
@@ -477,7 +501,7 @@ class PortfolioEnv(object):
                  ):
 
         self.window_len = window_len
-        self.num_assets = rtns_data.shape[0]
+        self.num_assets = assets_data.shape[0]
         self.trade_len = trade_len
         self.val_mode = False
         self.test_mode = False
@@ -487,7 +511,7 @@ class PortfolioEnv(object):
         self.allow_short = allow_short
         self.mode = mode
 
-        self.src = DataGenerator(assets_data=assets_data, rtns_data=rtns_data, market_data=market_data,
+        self.src = DataGenerator(assets_data=assets_data, market_data=market_data,
                                  in_features=in_features, val_idx=val_idx, test_idx=test_idx,
                                  batch_size=batch_size, max_steps=max_steps, norm_type=norm_type,
                                  window_len=window_len, trade_len=trade_len, mode=mode, allow_short=allow_short)

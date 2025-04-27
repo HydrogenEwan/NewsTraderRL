@@ -6,13 +6,88 @@ import time
 from datetime import datetime
 import logging
 from tqdm import *
-
+import numpy as np
+import torch
 from torch.utils.tensorboard import SummaryWriter
 
-from utils.parse_config import ConfigParser
-from utils.functions import *
-from agent import *
-from environment.portfolio_env import PortfolioEnv
+from .utils.parse_config import ConfigParser
+from .utils.functions import *
+from .agent import *
+from .environment.portfolio_env import PortfolioEnv
+from ml_model.ml_model_helper import MlModelHelper
+from common.config.db_config import MONGODB_COLLECTION_OHLC
+from common.config.target_tickers import TARGET_TICKERS
+
+
+def fetch_data_from_mongodb(target_tickers, start_date=None, end_date=None):
+    """
+    Fetch stock and market data from MongoDB using ml_model_helper.
+    
+    Args:
+        target_tickers: List of tickers to fetch data for
+        start_date: Start date in 'YYYY-MM-DD' format
+        end_date: End date in 'YYYY-MM-DD' format
+        
+    Returns:
+        tuple: (stocks_data, market_history)
+            stocks_data: numpy array of shape (num_stocks, num_days, 5)
+            market_history: numpy array of shape (num_days, 5)
+    """
+    helper = MlModelHelper()
+    
+    # Initialize data structures
+    all_dates = set()
+    stock_data_dict = {ticker: [] for ticker in target_tickers}
+    
+    # Fetch data for each ticker
+    for ticker in target_tickers:
+        query = {"ticker": ticker}
+        if start_date:
+            query["date"] = {"$gte": start_date}
+        if end_date:
+            query["date"] = {"$lte": end_date}
+            
+        for doc in helper.mongodb.find(MONGODB_COLLECTION_OHLC, query):
+            date = doc['date']
+            all_dates.add(date)
+            stock_data_dict[ticker].append({
+                'date': date,
+                'close': doc['close'],
+                'high': doc['high'],
+                'low': doc['low'],
+                'volume': doc['volume'],
+                'market_cap': doc.get('market_cap', doc['close'] * doc['volume'])
+            })
+    
+    if not all_dates:
+        raise ValueError(f"No data found for tickers {target_tickers} in MongoDB. Please check if the tickers exist and have data.")
+    
+    # Sort dates and create date index mapping
+    all_dates = sorted(list(all_dates))
+    date_to_idx = {date: idx for idx, date in enumerate(all_dates)}
+    
+    # Create numpy arrays
+    num_stocks = len(target_tickers)
+    num_days = len(all_dates)
+    stocks_data = np.zeros((num_stocks, num_days, 5))
+    market_history = np.zeros((num_days, 5))
+    
+    # Fill stock data
+    for i, ticker in enumerate(target_tickers):
+        for data_point in stock_data_dict[ticker]:
+            idx = date_to_idx[data_point['date']]
+            stocks_data[i, idx] = [
+                data_point['close'],
+                data_point['high'],
+                data_point['low'],
+                data_point['volume'],
+                data_point['market_cap']
+            ]
+    
+    # Calculate market history (using mean of all stocks)
+    market_history = np.mean(stocks_data, axis=0)
+    
+    return stocks_data, market_history
 
 
 def run(func_args):
@@ -20,7 +95,7 @@ def run(func_args):
         torch.manual_seed(func_args.seed)
         np.random.seed(func_args.seed)
 
-    data_prefix = './data/' + func_args.market + '/'
+    data_prefix = 'ml_model/model1/data/' + func_args.market + '/'
     matrix_path = data_prefix + func_args.relation_file
 
     start_time = datetime.now().strftime('%m%d_%H_%M_%S')
@@ -62,107 +137,101 @@ def run(func_args):
         logger.addHandler(chlr)
         logger.addHandler(fhlr)
 
-        if func_args.market == 'DJIA':
-            stocks_data = np.load(data_prefix + 'stocks_data.npy')
-            rate_of_return = np.load( data_prefix + 'ror.npy')
-            market_history = np.load(data_prefix + 'market_data.npy')
-            assert stocks_data.shape[:-1] == rate_of_return.shape, 'file size error'
-            A = torch.from_numpy(np.load(matrix_path)).float().to(func_args.device)
-            
-            # Calculate test index dynamically based on data size and test ratio
-            total_days = rate_of_return.shape[1]
-            test_ratio = getattr(func_args, 'test_ratio', 0.2)  # Default to 20% test set
-            test_idx = int(total_days * (1 - test_ratio))
-            logger.info(f"Total days: {total_days}, Test index: {test_idx} (using {test_ratio*100}% for testing)")
-            
-            allow_short = True
-        elif func_args.market == 'HSI':
-            stocks_data = np.load(data_prefix + 'stocks_data.npy')
-            rate_of_return = np.load(data_prefix + 'ror.npy')
-            market_history = np.load(data_prefix + 'market_data.npy')
-            assert stocks_data.shape[:-1] == rate_of_return.shape, 'file size error'
-            A = torch.from_numpy(np.load(matrix_path)).float().to(func_args.device)
-            test_idx = 4211
-            allow_short = True
-        elif func_args.market == 'CSI100':
-            stocks_data = np.load(data_prefix + 'stocks_data.npy')
-            rate_of_return = np.load(data_prefix + 'ror.npy')
-            A = torch.from_numpy(np.load(matrix_path)).float().to(func_args.device)
-            test_idx = 1944
-            market_history = None
-            allow_short = False
-        elif func_args.market == 'SP500':
-            stocks_data = np.load(data_prefix + 'stocks_data.npy')
-            rate_of_return = np.load(data_prefix + 'ror.npy')
-            market_history = np.load(data_prefix + 'market_data.npy')
-            assert stocks_data.shape[:-1] == rate_of_return.shape, 'file size error'
-            A = torch.from_numpy(np.load(matrix_path)).float().to(func_args.device)
-            
-            # Calculate test index dynamically based on data size and test ratio
-            total_days = rate_of_return.shape[1]
-            test_ratio = getattr(func_args, 'test_ratio', 0.2)  # Default to 20% test set
-            test_idx = int(total_days * (1 - test_ratio))
-            logger.info(f"Total days: {total_days}, Test index: {test_idx} (using {test_ratio*100}% for testing)")
-            
-            allow_short = True
-
-        env = PortfolioEnv(assets_data=stocks_data, market_data=market_history, rtns_data=rate_of_return,
-                           in_features=func_args.in_features, val_idx=test_idx, test_idx=test_idx,
-                           batch_size=func_args.batch_size, window_len=func_args.window_len, trade_len=func_args.trade_len,
-                           max_steps=func_args.max_steps, mode=func_args.mode, norm_type=func_args.norm_type,
-                           allow_short=allow_short)
-
-        supports = [A]
-        actor = RLActor(supports, func_args).to(func_args.device)
-        agent = RLAgent(env, actor, func_args)
-
-        mini_batch_num = int(np.ceil(len(env.src.order_set) / func_args.batch_size))
         try:
-            max_cr = 0
-            # Add outer progress bar for epochs
-            epoch_pbar = tqdm(range(func_args.epochs), desc="Training Progress", position=0)
-            for epoch in epoch_pbar:
-                epoch_return = 0
-                # Update the description to show current epoch
-                epoch_pbar.set_description(f"Epoch {epoch+1}/{func_args.epochs}")
-                
-                for j in tqdm(range(mini_batch_num), desc=f"Mini-batches", position=1, leave=False):
-                    episode_return, avg_rho, avg_mdd = agent.train_episode()
-                    epoch_return += episode_return
-                avg_train_return = epoch_return / mini_batch_num
-                logger.warning('[%s]round %d, avg train return %.4f, avg rho %.4f, avg mdd %.4f' %
-                               (start_time, epoch, avg_train_return, avg_rho, avg_mdd))
-                agent_wealth = agent.evaluation()
-                metrics = calculate_metrics(agent_wealth, func_args.trade_mode)
-                writer.add_scalar('Test/APR', metrics['APR'], global_step=epoch)
-                writer.add_scalar('Test/MDD', metrics['MDD'], global_step=epoch)
-                writer.add_scalar('Test/AVOL', metrics['AVOL'], global_step=epoch)
-                writer.add_scalar('Test/ASR', metrics['ASR'], global_step=epoch)
-                writer.add_scalar('Test/SoR', metrics['DDR'], global_step=epoch)
-                writer.add_scalar('Test/CR', metrics['CR'], global_step=epoch)
-                
-                # Update the progress bar with metrics
-                epoch_pbar.set_postfix({
-                    'CR': f"{float(metrics['CR']):.3f}",
-                    'APR': f"{float(metrics['APR'])*100:.2f}%",
-                    'MDD': f"{float(metrics['MDD'])*100:.2f}%"
-                })
+            # Use all tickers from TARGET_TICKERS
+            logger.info(f"Using all {len(TARGET_TICKERS)} target tickers from config")
+            
+            # Fetch data from MongoDB using all tickers
+            stocks_data, market_history = fetch_data_from_mongodb(TARGET_TICKERS)
+            
+            # Update num_assets in func_args to match the actual number of tickers
+            func_args.num_assets = stocks_data.shape[0]
+            logger.info(f"Updated num_assets to {func_args.num_assets} based on data shape")
+            
+            # Load and adjust the adjacency matrix if needed
+            try:
+                A = torch.from_numpy(np.load(matrix_path)).float().to(func_args.device)
+                # Check if the adjacency matrix dimensions match the number of tickers
+                if A.shape[0] != func_args.num_assets or A.shape[1] != func_args.num_assets:
+                    logger.warning(f"Adjacency matrix dimensions ({A.shape[0]}, {A.shape[1]}) don't match number of tickers ({func_args.num_assets})")
+                    # Create a new identity matrix with the correct dimensions
+                    A = torch.eye(func_args.num_assets, device=func_args.device)
+                    logger.info(f"Created new identity adjacency matrix with shape {A.shape}")
+            except Exception as e:
+                logger.warning(f"Error loading adjacency matrix: {e}. Creating identity matrix instead.")
+                A = torch.eye(func_args.num_assets, device=func_args.device)
+            
+            # Calculate test index dynamically based on data size and test ratio
+            total_days = stocks_data.shape[1]
+            test_ratio = getattr(func_args, 'test_ratio', 0.2)  # Default to 20% test set
+            test_idx = int(total_days * (1 - test_ratio))
+            logger.info(f"Total days: {total_days}, Test index: {test_idx} (using {test_ratio*100}% for testing)")
+            
+            allow_short = True
 
-                if metrics['CR'] > max_cr:
-                    print('New Best CR Policy!!!!')
-                    max_cr = metrics['CR']
-                    torch.save(actor, os.path.join(model_save_dir, 'best_cr-'+str(epoch)+'.pkl'))
-                logger.warning('after training %d round, max wealth: %.4f, min wealth: %.4f,'
-                               ' avg wealth: %.4f, final wealth: %.4f, ARR: %.3f%%, ASR: %.3f, AVol" %.3f,'
-                               'MDD: %.2f%%, CR: %.3f, DDR: %.3f'
-                               % (
-                                   epoch, max(agent_wealth[0]), min(agent_wealth[0]), np.mean(agent_wealth),
-                                   agent_wealth[-1, -1], 100 * metrics['APR'], metrics['ASR'], metrics['AVOL'],
-                                   100 * metrics['MDD'], metrics['CR'], metrics['DDR']
-                               ))
-        except KeyboardInterrupt:
-            torch.save(actor, os.path.join(model_save_dir, 'final_model.pkl'))
-            torch.save(agent.optimizer.state_dict(), os.path.join(model_save_dir, 'final_optimizer.pkl'))
+            env = PortfolioEnv(assets_data=stocks_data, market_data=market_history,
+                               in_features=func_args.in_features, val_idx=test_idx, test_idx=test_idx,
+                               batch_size=func_args.batch_size, window_len=func_args.window_len, trade_len=func_args.trade_len,
+                               max_steps=func_args.max_steps, mode=func_args.mode, norm_type=func_args.norm_type,
+                               allow_short=allow_short)
+
+            supports = [A]
+            actor = RLActor(supports, func_args).to(func_args.device)
+            agent = RLAgent(env, actor, func_args)
+
+            mini_batch_num = int(np.ceil(len(env.src.order_set) / func_args.batch_size))
+            if mini_batch_num == 0:
+                raise ValueError("No data available for training. Please check if the data was loaded correctly.")
+                
+            try:
+                max_cr = 0
+                # Add outer progress bar for epochs
+                epoch_pbar = tqdm(range(func_args.epochs), desc="Training Progress", position=0)
+                for epoch in epoch_pbar:
+                    epoch_return = 0
+                    # Update the description to show current epoch
+                    epoch_pbar.set_description(f"Epoch {epoch+1}/{func_args.epochs}")
+                    
+                    for j in tqdm(range(mini_batch_num), desc=f"Mini-batches", position=1, leave=False):
+                        episode_return, avg_rho, avg_mdd = agent.train_episode()
+                        epoch_return += episode_return
+                    avg_train_return = epoch_return / mini_batch_num
+                    logger.warning('[%s]round %d, avg train return %.4f, avg rho %.4f, avg mdd %.4f' %
+                                   (start_time, epoch, avg_train_return, avg_rho, avg_mdd))
+                    agent_wealth = agent.evaluation()
+                    metrics = calculate_metrics(agent_wealth, func_args.trade_mode)
+                    writer.add_scalar('Test/APR', metrics['APR'], global_step=epoch)
+                    writer.add_scalar('Test/MDD', metrics['MDD'], global_step=epoch)
+                    writer.add_scalar('Test/AVOL', metrics['AVOL'], global_step=epoch)
+                    writer.add_scalar('Test/ASR', metrics['ASR'], global_step=epoch)
+                    writer.add_scalar('Test/SoR', metrics['DDR'], global_step=epoch)
+                    writer.add_scalar('Test/CR', metrics['CR'], global_step=epoch)
+                    
+                    # Update the progress bar with metrics
+                    epoch_pbar.set_postfix({
+                        'CR': f"{float(metrics['CR']):.3f}",
+                        'APR': f"{float(metrics['APR'])*100:.2f}%",
+                        'MDD': f"{float(metrics['MDD'])*100:.2f}%"
+                    })
+
+                    if metrics['CR'] > max_cr:
+                        print('New Best CR Policy!!!!')
+                        max_cr = metrics['CR']
+                        torch.save(actor, os.path.join(model_save_dir, 'best_cr-'+str(epoch)+'.pkl'))
+                    logger.warning('after training %d round, max wealth: %.4f, min wealth: %.4f,'
+                                   ' avg wealth: %.4f, final wealth: %.4f, ARR: %.3f%%, ASR: %.3f, AVol" %.3f,'
+                                   'MDD: %.2f%%, CR: %.3f, DDR: %.3f'
+                                   % (
+                                       epoch, max(agent_wealth[0]), min(agent_wealth[0]), np.mean(agent_wealth),
+                                       agent_wealth[-1, -1], 100 * metrics['APR'], metrics['ASR'], metrics['AVOL'],
+                                       100 * metrics['MDD'], metrics['CR'], metrics['DDR']
+                                   ))
+            except KeyboardInterrupt:
+                torch.save(actor, os.path.join(model_save_dir, 'final_model.pkl'))
+                torch.save(agent.optimizer.state_dict(), os.path.join(model_save_dir, 'final_optimizer.pkl'))
+        except Exception as e:
+            logger.error(f"Error during training: {str(e)}")
+            raise
 
 
 if __name__ == '__main__':
@@ -190,7 +259,7 @@ if __name__ == '__main__':
             options = json.load(f)
             args = ConfigParser(options)
     else:
-        with open('./hyper.json') as f:
+        with open('ml_model/model1/hyper.json') as f:
             options = json.load(f)
             args = ConfigParser(options)
     args.update(opts)
