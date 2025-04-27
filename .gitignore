@@ -1,3 +1,10 @@
+# temp files and folder
+temp/
+temp.py
+
+# sec data
+*downloaded_sec_filings
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

@@ -13,5 +13,11 @@ Flask>=2.3.3
 yfinance>=0.2.55
 click>=8.1.8
 finnhub-python==2.4.23
-kafka-python>=2.1.5
+
+# sec data. Use latest version to avoid API fetching errors.
+git+https://github.com/sec-edgar/sec-edgar.git@master
+bs4
+lxml
+
+# kafka
 kafka-python>=2.1.5
