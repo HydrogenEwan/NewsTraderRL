@@ -5,8 +5,8 @@ import torch
 import torch.nn as nn
 from torch.distributions.normal import Normal
 
-from model.ASU import ASU
-from model.MSU import MSU
+from .model.ASU import ASU
+from .model.MSU import MSU
 
 EPS = 1e-20
 

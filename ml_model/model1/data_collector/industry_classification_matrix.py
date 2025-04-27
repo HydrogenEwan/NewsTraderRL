@@ -8,6 +8,7 @@ import json
 import time
 from tqdm import tqdm
 import argparse
+from common.config.target_tickers import TARGET_TICKERS
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -28,23 +29,12 @@ class MatrixMaker:
         self.end_date = end_date or datetime.now().strftime('%Y-%m-%d')
         
         # Create data directory if it doesn't exist
-        self.data_dir = os.path.join('data', market)
+        self.data_dir = os.path.join('ml_model/model1/data', market)
         os.makedirs(self.data_dir, exist_ok=True)
         
-        # Load components from JSON file if it exists
-        components_file = os.path.join(self.data_dir, 'components.json')
-        if os.path.exists(components_file):
-            try:
-                with open(components_file, 'r') as f:
-                    components_data = json.load(f)
-                    self.components = components_data.get('components', [])
-                    logger.info(f"Loaded {len(self.components)} components from {components_file}")
-            except Exception as e:
-                logger.error(f"Error loading components from {components_file}: {e}")
-                self.components = self._get_sp500_components()
-        else:
-            logger.info(f"Components file not found at {components_file}, fetching components...")
-            self.components = self._get_sp500_components()
+        # Use TARGET_TICKERS from common/config/target_tickers.py
+        self.components = TARGET_TICKERS
+        logger.info(f"Using {len(self.components)} tickers from common/config/target_tickers.py")
         
         # Market-specific configurations
         self.market_configs = {
@@ -54,26 +44,6 @@ class MatrixMaker:
             }
         }
          
-    def _get_sp500_components(self):
-        """Get S&P 500 component stocks."""
-        try:
-            # Note: This requires the lxml package to be installed
-            # Install it using: pip install lxml
-            table = pd.read_html('https://en.wikipedia.org/wiki/List_of_S%26P_500_companies')
-            df = table[0]
-            # Extract ticker symbols and remove any dots
-            tickers = [ticker.replace('.', '-') for ticker in df['Symbol'].tolist()]
-            logger.info(f"Successfully retrieved {len(tickers)} S&P 500 components")
-            return tickers
-        except Exception as e:
-            logger.error(f"Error retrieving S&P 500 components: {e}")
-            # Return a subset of major S&P 500 components as fallback
-            return [
-                'AAPL', 'MSFT', 'AMZN', 'GOOGL', 'META', 'NVDA', 'BRK-B', 'JPM', 'JNJ', 'V',
-                'PG', 'MA', 'HD', 'CVX', 'AVGO', 'ABBV', 'LLY', 'PFE', 'BAC', 'KO',
-                'PEP', 'TMO', 'COST', 'DHR', 'CSCO', 'MRK', 'ABT', 'VZ', 'CRM', 'ACN'
-            ]
-    
     def collect_industry_info(self):
         """
         Collect industry and sector information for all components.
@@ -226,7 +196,6 @@ if __name__ == '__main__':
     collector = MatrixMaker(market=args.market)
     num_stocks = len(collector.market_configs[collector.market]['components'])
     print(f"Creating industry classification matrix for {num_stocks} stocks...")
-    print(f"Using components from: {os.path.join(collector.data_dir, 'components.json')}")
     
     # Add progress tracking
     start_time = time.time()
