@@ -1,10 +1,7 @@
-import numpy as np
-import threading
-from concurrent.futures import ThreadPoolExecutor
-from config import CONFIG
-from model_manager import ModelManager
-from processing.chunker import chunk_text
-from processing.surprisal import calc_surprisal
+import torch
+from ml_model.sentiment_analysis.model_manager import ModelManager
+from ml_model.sentiment_analysis.processing.chunker import chunk_text
+from ml_model.sentiment_analysis.processing.surprisal import calc_surprisal, calc_surprisal_batch
 
 def process_chunk(chunk: str) -> dict:
     sent_pipe = ModelManager.get_model("sentiment")
@@ -37,29 +34,75 @@ def process_chunk(chunk: str) -> dict:
         "text": chunk,
     }
 
-def process_text(text: str) -> dict:
-    chunks = chunk_text(text)
-    with ThreadPoolExecutor(max_workers=CONFIG["max_workers"]) as ex:
-        results = list(ex.map(process_chunk, chunks))
+# def process_text(text: str) -> dict:
+#     chunks = chunk_text(text)
+#     with ThreadPoolExecutor(max_workers=CONFIG["max_workers"]) as ex:
+#         results = list(ex.map(process_chunk, chunks))
 
-    sentiments = [r["sentiment"] for r in results]
-    realness = [r["realness"] for r in results]
-    information = [r["information"] for r in results]
+#     sentiments = [r["sentiment"] for r in results]
+#     realness = [r["realness"] for r in results]
+#     information = [r["information"] for r in results]
 
-    reals = np.array(realness)
-    infos = np.array(information)
-    weights_raw = reals * infos
+#     reals = np.array(realness)
+#     infos = np.array(information)
+#     weights_raw = reals * infos
 
-    if weights_raw.sum() > 0:
-        weights = weights_raw / weights_raw.sum()
-        overall = float(np.dot(sentiments, weights))
-    else:
-        overall = float(np.mean(sentiments)) if sentiments else 0.0
+#     if weights_raw.sum() > 0:
+#         weights = weights_raw / weights_raw.sum()
+#         overall = float(np.dot(sentiments, weights))
+#     else:
+#         overall = float(np.mean(sentiments)) if sentiments else 0.0
 
-    return {
-        "overall_score": overall,
-        "sentiments": sentiments,
-        "realness": float(np.mean(realness)) if realness else 0.5,
-        "information": float(np.sum(information)),
-        "chunks": len(chunks),
-    }
+#     return {
+#         "overall_score": overall,
+#         "sentiments": sentiments,
+#         "realness": float(np.mean(realness)) if realness else 0.5,
+#         "information": float(np.sum(information)),
+#         "chunks": len(chunks),
+#     }
+
+def process_text_batch(texts: list[str], batch_size: int = 32) -> list[dict]:
+    results: list[dict] = []
+    for start in range(0, len(texts), batch_size):
+        batch_texts = texts[start:start + batch_size]
+
+        sent_logits = ModelManager.get_sentiment_logits(batch_texts)
+        fake_logits = ModelManager.get_fake_news_logits(batch_texts)
+
+        sent_probs = torch.softmax(sent_logits, dim=-1).cpu().numpy()
+        fake_probs = torch.softmax(fake_logits, dim=-1).cpu().numpy()
+
+        infos = calc_surprisal_batch(batch_texts)
+
+        sent_pipe = ModelManager.get_model("sentiment")
+        id2label = sent_pipe.model.config.id2label
+        label2id = {label: idx for idx, label in id2label.items()}
+        neg_idx = label2id.get("Negative", 0)
+        neu_idx = label2id.get("Neutral", 1)
+        pos_idx = label2id.get("Positive", 2)
+
+        for idx, text in enumerate(batch_texts):
+            p_neg = sent_probs[idx, neg_idx]
+            p_neu = sent_probs[idx, neu_idx]
+            p_pos = sent_probs[idx, pos_idx]
+
+            if p_neu >= max(p_pos, p_neg):
+                sent_score = 0.0
+            else:
+                sent_score = p_pos - p_neg
+
+            real_score = fake_probs[idx, 1]
+            info = infos[idx]
+
+            max_idx = int(sent_probs[idx].argmax())
+            label = id2label[max_idx]
+
+            results.append({
+                "text":            text,
+                "sentiment":       float(sent_score),
+                "realness":        float(real_score),
+                "information":     float(info),
+                "overall_score":   float(sent_score),
+                "sentiment_label": label
+            })
+    return results

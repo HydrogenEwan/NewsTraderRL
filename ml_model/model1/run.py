@@ -56,7 +56,7 @@ def fetch_data_from_mongodb(target_tickers, start_date=None, end_date=None):
                 'high': doc['high'],
                 'low': doc['low'],
                 'volume': doc['volume'],
-                'market_cap': doc.get('market_cap', doc['close'] * doc['volume'])
+                'marketcap': doc.get('marketcap')
             })
     
     if not all_dates:
@@ -70,7 +70,6 @@ def fetch_data_from_mongodb(target_tickers, start_date=None, end_date=None):
     num_stocks = len(target_tickers)
     num_days = len(all_dates)
     stocks_data = np.zeros((num_stocks, num_days, 5))
-    market_history = np.zeros((num_days, 5))
     
     # Fill stock data
     for i, ticker in enumerate(target_tickers):
@@ -81,11 +80,47 @@ def fetch_data_from_mongodb(target_tickers, start_date=None, end_date=None):
                 data_point['high'],
                 data_point['low'],
                 data_point['volume'],
-                data_point['market_cap']
+                data_point['marketcap']
             ]
     
-    # Calculate market history (using mean of all stocks)
-    market_history = np.mean(stocks_data, axis=0)
+    # Fetch market data (S&P 500 index) from MongoDB
+    market_data_dict = {}
+    market_query = {"ticker": "^GSPC"}
+    if start_date:
+        market_query["date"] = {"$gte": start_date}
+    if end_date:
+        market_query["date"] = {"$lte": end_date}
+    
+    for doc in helper.mongodb.find(MONGODB_COLLECTION_OHLC, market_query):
+        date = doc['date']
+        if date in date_to_idx:  # Only include dates that match our stock data
+            market_data_dict[date] = {
+                'close': doc['close'],
+                'high': doc['high'],
+                'low': doc['low'],
+                'volume': doc['volume'],
+                'marketcap': doc.get('marketcap')
+            }
+    
+    # Create market history array
+    market_history = np.zeros((num_days, 5))
+    
+    # Fill market data
+    for date, idx in date_to_idx.items():
+        if date in market_data_dict:
+            data = market_data_dict[date]
+            market_history[idx] = [
+                data['close'],
+                data['high'],
+                data['low'],
+                data['volume'],
+                data['marketcap']
+            ]
+        else:
+            # If market data is missing for a date, use the mean of stock data for that day
+            market_history[idx] = np.mean(stocks_data[:, idx], axis=0)
+            logger = logging.getLogger()
+            logger.warning(f"Market data missing for date {date}. Using mean of stock data instead.")
     
     return stocks_data, market_history
 
