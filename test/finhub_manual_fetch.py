@@ -74,7 +74,7 @@ if __name__ == '__main__':
         "TSLA", "TXN", "UNH", "UNP", "UPS", "USB", "V", "VZ", "WFC", "WMT", "XOM"
     ]
 
-    pipeline = FinnhubNewsPipeline(api_key="d00hff9r01qk939o4ni0d00hff9r01qk939o4nig")
+    pipeline = FinnhubNewsPipeline(api_key="d033oe1r01qm9cbdorj0d033oe1r01qm9cbdorjg")
 
     pipeline.client.delete(MONGODB_COLLECTION_NEWS, {})
     count = pipeline.client.count_documents(MONGODB_COLLECTION_NEWS, {})
@@ -85,8 +85,8 @@ if __name__ == '__main__':
     for ticker in TICKERS:
         pipeline.run_historical_pipeline(
             ticker,
-            start="2024-04-18",
-            end="2025-04-18",
+            start="2021-01-01",
+            end="2021-12-31",
             batch_days=365,
             max_calls_per_day=1000,
             call_counter=call_counter

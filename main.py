@@ -20,6 +20,8 @@ def run_yahoo_pipeline(ticker, start, end, issimulation):
     pipeline = YahooOhlcPipeline()
 
     ticker_list = TARGET_TICKERS
+    ticker_list.append("^GSPC")
+    ticker_list.append("^VIX")
     if ticker is not None:
         ticker_list = [t.strip() for t in ticker.split(',') if t.strip()]
 
