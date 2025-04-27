@@ -1,3 +1,41 @@
+"""
+SEC Pipeline Documentation
+
+This module provides functionality for fetching and processing SEC filings data through a pipeline system.
+
+The main components are:
+- SecPipeline: Main pipeline class for handling SEC data
+- Historical data fetching and processing
+- Simulation data processing
+- Database integration for storing SEC filings
+
+Key Features:
+- Fetches SEC filings for specified date ranges and tickers
+- Processes and parses raw SEC filing data
+- Stores processed data in MongoDB
+- Supports batch processing for large datasets
+- Provides simulation capabilities for backtesting
+
+Dependencies:
+- typing
+- common.interface.data_pipeline
+- common.model.simulation
+- common.config.target_tickers
+- data.sec.sec_fetcher
+- data.sec.sec_parser
+
+Example Usage:
+    pipeline = SecPipeline()
+    pipeline.run_historical_pipeline(
+        start="2023-01-01",
+        end="2023-12-31",
+        tickers=["AAPL", "GOOGL"],
+        batch_size=100
+    )
+"""
+
+from tqdm import tqdm
+from typing import Iterator
 from common.interface.data_pipeline import DataPipeline
 from common.model.simulation import SimulationItem
 from common.config.target_tickers import TARGET_TICKERS
@@ -25,12 +63,11 @@ class SecPipeline(DataPipeline):
         run_historical_pipeline: Fetches and stores historical SEC filings data
         run_simulation_pipeline: Processes SEC data for simulation purposes
     """
-    def __init__(self):
+    def __init__(self, collection="sec_data"):
         super().__init__()
         self.parser = SecParser()
         self.fetcher = SecFetcher(self.parser, TARGET_TICKERS)
-        self.collection = "sec_data"
-        self.dummy = "sec_test"
+        self.collection = collection
 
     def run_historical_pipeline(
         self,
@@ -52,12 +89,23 @@ class SecPipeline(DataPipeline):
             None
         """
         sec_data = self.fetcher.fetch(start, end, tickers)
+        self.push_to_db(sec_data, batch_size)
+
+    def push_to_db(self, sec_data: Iterator, batch_size: int = 100):
+        """
+        Push sec data to db.
+        Args:
+            sec_data (Iterator): Iterator of sec data
+            batch_size (int, optional): Number of records per batch. Defaults to 100.
+        Returns:
+            None
+        """
         sec_batch = self.batch_iterator(sec_data, batch_size)
-        for batch in sec_batch:
+        for batch in tqdm(sec_batch, desc="Pushing to MongoDB"):
             # print(f"batch: {batch}")
             print(f"batch type: {type(batch)}")
             print(f"batch[0] type: {type(batch[0])}")
-            self.client.insert_many(self.dummy, batch)
+            self.client.insert_many(self.collection, batch)
 
     def run_simulation_pipeline(self, ticker: str, start: str, end: str, batch_size: int = 100):
         pass

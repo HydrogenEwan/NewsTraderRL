@@ -31,7 +31,7 @@ class SecData(DailyBasisModel):
             "id": self.id,
             "text": self.text,
             "datetime": self.datetime,
-            "date": self.date.isoformat(),
+            "date": self.date.isoformat() if self.date else None,
             "ticker": self.ticker
         }
 
@@ -46,12 +46,10 @@ class SecData(DailyBasisModel):
         Returns:
             SecData: SecData object created from the dictionary
         """
-        ts = item["datetime"] # time stamp
-        # print("ts: ", ts)
         return SecData(
             id=item["id"],
-            datetime=ts,
-            date=datetime.fromtimestamp(ts).date(),
+            datetime=item["datetime"],
+            date=item["date"],
             text=item["text"],
             ticker=item["ticker"]
         )

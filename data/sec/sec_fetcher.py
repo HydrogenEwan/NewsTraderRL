@@ -1,5 +1,6 @@
 '''Module for fetching SEC data'''
 import uuid
+import re
 from pathlib import Path
 from typing import Iterator
 from datetime import datetime
@@ -54,7 +55,19 @@ class SecFetcher(DataFetcher):
         downloaded_files = list(save_dir.glob('**/*.txt'))  # Recursively search for all .txt files
         # print(f"files are {downloaded_files}")
         print(f"Successfully downloaded {len(downloaded_files)} filing(s).")
+        yield from self.extract_and_parse(downloaded_files)
 
+    def extract_and_parse(self, downloaded_files: list[Path]) -> Iterator:
+        """Extract and parse downloaded SEC filing files.
+        Args:
+            downloaded_files (list[Path]): List of downloaded SEC filing file paths
+        Yields:
+            Iterator: Parsed SEC filing data objects containing:
+                - id: Unique UUID for the filing
+                - ticker: Company ticker symbol
+                - text: Cleaned filing text content
+                - datetime: Unix timestamp of filing
+        """
         for file_path in downloaded_files:
             with open(file_path, 'r', encoding='utf-8') as f:
                 # Read file content and extract stock name from path
@@ -67,8 +80,13 @@ class SecFetcher(DataFetcher):
                 ticker = str(file_path).split('/')[-3]  # Extract stock name from path structure
                 raw['ticker'] = ticker
 
-                clean_text, ts = self.clean_xml(content)
+                clean_text, dt, ts = self.clean_xml(content)
                 raw['text'] = clean_text
+                if dt:
+                    raw['date'] = dt.strftime('%Y-%m-%d')
+                else:
+                    print(f"No date found for {file_path}")
+                    raw['date'] = None
                 raw['datetime'] = ts
                 # print("start")
                 # print(f"content: {type(content)}")
@@ -77,7 +95,7 @@ class SecFetcher(DataFetcher):
                 # print("end")
                 yield self.parser.parse(raw)
 
-    def clean_xml(self, raw_text: str) -> tuple[str, int]:
+    def clean_xml(self, raw_text: str) -> tuple[str, str, int]:
         """Clean raw SEC filing text data by removing XBRL markup and extracting clean text.
         will also return the timestamp of the filing
 
@@ -86,21 +104,31 @@ class SecFetcher(DataFetcher):
 
         Returns:
             str: Cleaned text with markup removed and proper newline separators
+            str: date of the filing
             int: Timestamp of the filing
         """
         # Parse the raw text as XML using BeautifulSoup
-        soup = BeautifulSoup(raw_text, features='xml')
+        soup = BeautifulSoup(raw_text,'lxml')
         unix_ts = None
-        acceptance_tag = soup.find("ACCEPTANCE-DATETIME")
-        if acceptance_tag:
+        dt = None
+        match = re.search(r"FILED AS OF DATE:\s+(\d+)", raw_text)
+        # acceptance_tag = soup.find("ACCEPTANCE-DATETIME")
+        if match:
             # Extract the timestamp of the filing from the raw text
             # since ACCEPTANCE-DATETIME will match many paragrahs, we will use the first match
-            ts = acceptance_tag.text.split('\n')[0]
+            # ts = acceptance_tag.text.split('\n')[0]
+            acceptance_datetime = match.group(1)
             # Parse it to a datetime object
-            dt = datetime.strptime(ts, "%Y%m%d%H%M%S")
+            dt = datetime.strptime(acceptance_datetime, "%Y%m%d")
+            # print("dt: ", dt)
             # Convert to Unix timestamp
             unix_ts = int(dt.timestamp())
-            # print("ts: ", ts)
+            # print("ts: ", unix_ts)
+        else:
+            print("No ACCEPTANCE-DATETIME tag found in raw text")
+             # Print first 5 lines of raw text
+            preview = '\n'.join(raw_text.split('\n')[:15])
+            print(f"First 15 lines of raw_text:\n{preview}")
 
         # Remove all ix namespace elements as they're typically XBRL markup
         for tag in soup.find_all(lambda tag: tag.name and tag.name.startswith("ix:")):
@@ -112,4 +140,4 @@ class SecFetcher(DataFetcher):
         clean_text = '\n'.join(line for line in clean_text.splitlines() if line.strip())
         # print("clean_text: ", clean_text)
         # print( "ts: ", ts)
-        return clean_text, unix_ts
+        return clean_text, dt, unix_ts
