@@ -19,7 +19,7 @@ class MlModelHelper:
         self.mongodb = MongoDbClient()
         self.kafka = KafkaClient()
         
-        ModelManager.load_all_models()
+        # ModelManager.load_all_models()
 
     def get_ohlc(self, ticker: str, date: str) -> Ohlc:
         """
@@ -144,9 +144,9 @@ if __name__ == "__main__":
     ml_helper = MlModelHelper()
 
     print("OHLC TEST ==================================")
-    ohlc = ml_helper.get_ohlc("MMM", "2009-10-01")
+    ohlc = ml_helper.get_ohlc("^GSPC", "2009-10-01")
     print(f"[OHLC] {ohlc}")
-    print(f"[TURNOVER] {ml_helper.get_aggregate_turnover('2009-10-01')}")
+    # print(f"[TURNOVER] {ml_helper.get_aggregate_turnover('2009-10-01')}")
 
     start = time.perf_counter()
 
