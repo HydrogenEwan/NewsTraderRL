@@ -282,4 +282,4 @@ if __name__ == '__main__':
     
     print(f"Industry classification matrix created in {end_time - start_time:.2f} seconds")
     print(f"Matrix shape: {industry_matrix.shape}")
-    print(f"Matrix saved to: {os.path.join(collector.data_dir, 'industry_classification.npy')}")
+    print(f"Matrix saved to: {os.path.join(collector.data_dir, 'industry_classificationt.npy')}")

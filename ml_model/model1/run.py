@@ -18,6 +18,8 @@ from ml_model.ml_model_helper import MlModelHelper
 from common.config.db_config import MONGODB_COLLECTION_OHLC
 from common.config.target_tickers import TARGET_TICKERS
 
+import psutil
+import gc
 
 def fetch_data_from_mongodb(target_tickers, start_date=None, end_date=None):
     """
@@ -201,6 +203,23 @@ def run(func_args):
             test_ratio = getattr(func_args, 'test_ratio', 0.2)  # Default to 20% test set
             test_idx = int(total_days * (1 - test_ratio))
             logger.info(f"Total days: {total_days}, Test index: {test_idx} (using {test_ratio*100}% for testing)")
+
+            def print_memory_usage(tag=""):
+                process = psutil.Process()
+                mem = process.memory_info().rss / 1024 / 1024  # in MB
+                print(f"[{tag}] Current RAM usage: {mem:.2f} MB")
+
+            # After loading stocks_data and market_history
+            print("stocks_data shape:", stocks_data.shape)
+            print("market_history shape:", market_history.shape)
+            print("stocks_data size (MB):", stocks_data.nbytes / 1024 / 1024)
+            print("market_history size (MB):", market_history.nbytes / 1024 / 1024)
+            print_memory_usage("After loading data")
+
+            print("CUDA available:", torch.cuda.is_available())
+            print("Current device:", torch.cuda.current_device())
+            print("Device count:", torch.cuda.device_count())
+            print("Device name:", torch.cuda.get_device_name(0))
             
             allow_short = True
 
@@ -221,8 +240,11 @@ def run(func_args):
             try:
                 max_cr = 0
                 # Add outer progress bar for epochs
+
+                print_memory_usage("Before training loop") #debugging code for GPU
                 epoch_pbar = tqdm(range(func_args.epochs), desc="Training Progress", position=0)
                 for epoch in epoch_pbar:
+                    print_memory_usage(f"Start of epoch {epoch}") #debugging code for GPU
                     epoch_return = 0
                     # Update the description to show current epoch
                     epoch_pbar.set_description(f"Epoch {epoch+1}/{func_args.epochs}")
@@ -253,6 +275,12 @@ def run(func_args):
                         print('New Best CR Policy!!!!')
                         max_cr = metrics['CR']
                         torch.save(actor, os.path.join(model_save_dir, 'best_cr-'+str(epoch)+'.pkl'))
+
+                    print_memory_usage(f"End of epoch {epoch}") #debugging code for GPU
+                    print(f"[run.py] Allocated: {torch.cuda.memory_allocated() / 1024**3:.2f} GB, Reserved: {torch.cuda.memory_reserved() / 1024**3:.2f} GB")
+                    torch.cuda.empty_cache()
+                    gc.collect()
+                    
                     logger.warning('after training %d round, max wealth: %.4f, min wealth: %.4f,'
                                    ' avg wealth: %.4f, final wealth: %.4f, ARR: %.3f%%, ASR: %.3f, AVol" %.3f,'
                                    'MDD: %.2f%%, CR: %.3f, DDR: %.3f'

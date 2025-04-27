@@ -1,4 +1,5 @@
 import math
+import gc
 
 import numpy as np
 import torch
@@ -44,26 +45,32 @@ class RLActor(nn.Module):
         return self.__generator(scores, res, deterministic)
 
     def __generator(self, scores, res, deterministic=None):
-        weights = np.zeros((scores.shape[0], 2 * scores.shape[1]))
+        batch_size = scores.shape[0]
+        num_assets = scores.shape[1]
+        weights = torch.zeros((batch_size, 2 * num_assets), device=self.args.device)
 
         winner_scores = scores
         loser_scores = scores.sign() * (1 - scores)
 
         scores_p = torch.softmax(scores, dim=-1)
 
-        # winners_log_p = torch.log_softmax(winner_scores, dim=-1)
-        w_s, w_idx = torch.topk(winner_scores.detach(), self.args.G)
-
+        w_s, w_idx = torch.topk(winner_scores, self.args.G)
         long_ratio = torch.softmax(w_s, dim=-1)
 
-        for i, indice in enumerate(w_idx):
-            weights[i, indice.detach().cpu().numpy()] = long_ratio[i].cpu().numpy()
+        # Create a scatter index tensor for long positions
+        long_indices = torch.zeros((batch_size, self.args.G, 2), device=self.args.device, dtype=torch.long)
+        long_indices[:, :, 0] = torch.arange(batch_size, device=self.args.device).unsqueeze(1).expand(-1, self.args.G)
+        long_indices[:, :, 1] = w_idx
+        weights.scatter_(1, w_idx, long_ratio)
 
-        l_s, l_idx = torch.topk(loser_scores.detach(), self.args.G)
-
-        short_ratio = torch.softmax(l_s.detach(), dim=-1)
-        for i, indice in enumerate(l_idx):
-            weights[i, indice.detach().cpu().numpy() + scores.shape[1]] = short_ratio[i].cpu().numpy()
+        l_s, l_idx = torch.topk(loser_scores, self.args.G)
+        short_ratio = torch.softmax(l_s, dim=-1)
+        
+        # Create a scatter index tensor for short positions
+        short_indices = torch.zeros((batch_size, self.args.G, 2), device=self.args.device, dtype=torch.long)
+        short_indices[:, :, 0] = torch.arange(batch_size, device=self.args.device).unsqueeze(1).expand(-1, self.args.G)
+        short_indices[:, :, 1] = l_idx + num_assets
+        weights.scatter_(1, l_idx + num_assets, short_ratio)
 
         if self.args.msu_bool:
             mu = res[..., 0]
@@ -77,7 +84,7 @@ class RLActor(nn.Module):
                 rho = torch.clamp(sample_rho, 0.0, 1.0)
                 rho_log_p = m.log_prob(sample_rho)
         else:
-            rho = torch.ones((weights.shape[0])).to(self.args.device) * 0.5
+            rho = torch.ones((batch_size), device=self.args.device) * 0.5
             rho_log_p = None
         return weights, rho, scores_p, rho_log_p
 
@@ -107,6 +114,7 @@ class RLAgent():
 
         rho_records = []
 
+        # Initialize agent_wealth as a numpy array since environment expects numpy
         agent_wealth = np.ones((batch_size, 1), dtype=np.float32)
 
         while True:
@@ -126,45 +134,74 @@ class RLAgent():
             normed_ror = (ror - torch.mean(ror, dim=-1, keepdim=True)) / \
                          torch.std(ror, dim=-1, keepdim=True)
 
+            # Convert weights and rho to numpy for environment step
+            # Ensure they are float32 to match environment expectations
+            weights_np = weights.detach().cpu().numpy().astype(np.float32)
+            rho_np = rho.detach().cpu().numpy().astype(np.float32)
+
             next_states, rewards, rho_labels, masks, done, info = \
-                self.env.step(weights, rho.detach().cpu().numpy())
+                self.env.step(weights_np, rho_np)
 
-            steps_log_p_rho.append(log_p_rho)
-            steps_reward_total.append(rewards.total - info['market_avg_return'])
+            # For loss calculation, use the current batch's values (do not detach)
+            reward_diff = rewards.total - info['market_avg_return']
+            asu_grad_val = torch.log(torch.clamp(torch.sum(normed_ror * scores_p, dim=-1), min=1e-10))
 
-            # Calculate asu_grad with safeguards against NaN
-            asu_grad = torch.sum(normed_ror * scores_p, dim=-1)
-            # Add small epsilon to prevent log(0)
-            asu_grad = torch.clamp(asu_grad, min=1e-10)
-            steps_asu_grad.append(torch.log(asu_grad))
+            # For logging/history, detach
+            if log_p_rho is not None:
+                steps_log_p_rho.append(log_p_rho.detach().cpu())
+            else:
+                steps_log_p_rho.append(None)
+            if isinstance(reward_diff, torch.Tensor):
+                steps_reward_total.append(reward_diff.detach().cpu())
+            else:
+                steps_reward_total.append(reward_diff)
+            steps_asu_grad.append(asu_grad_val.detach().cpu())
 
+            # Update agent_wealth using numpy
             agent_wealth = np.concatenate((agent_wealth, info['total_value'][..., None]), axis=1)
             states = next_states
-
-            rho_records.append(np.mean(rho.detach().cpu().numpy()))
+            rho_records.append(np.mean(rho_np))
 
             if done:
                 if self.args.msu_bool:
-                    steps_log_p_rho = torch.stack(steps_log_p_rho, dim=-1)
+                    stacked_log_p_rho = torch.stack([lp for lp in steps_log_p_rho if lp is not None], dim=-1) if any(lp is not None for lp in steps_log_p_rho) else None
+                
+                # Convert reward_diff to tensor if it's not already
+                stacked_reward_total = []
+                for rt in steps_reward_total:
+                    if isinstance(rt, torch.Tensor):
+                        stacked_reward_total.append(rt.to(self.args.device))
+                    else:
+                        # Create a tensor with requires_grad=True
+                        stacked_reward_total.append(torch.tensor(rt, device=self.args.device, requires_grad=True))
+                
+                stacked_reward_total = torch.stack(stacked_reward_total, dim=-1)
+                
+                # Ensure asu_grad has requires_grad=True
+                stacked_asu_grad = []
+                for ag in steps_asu_grad:
+                    stacked_asu_grad.append(ag.to(self.args.device).requires_grad_(True))
+                stacked_asu_grad = torch.stack(stacked_asu_grad, dim=1)
 
-                steps_reward_total = np.array(steps_reward_total).transpose((1, 0))
-
-                rewards_total = torch.from_numpy(steps_reward_total).to(self.args.device)
-                mdd = self.cal_MDD(agent_wealth)
-
-                rewards_mdd = - 2 * torch.from_numpy(mdd - 0.5).to(self.args.device)
-
+                rewards_total = stacked_reward_total.transpose(0, 1)
                 rewards_total = (rewards_total - torch.mean(rewards_total, dim=-1, keepdim=True)) \
                                 / torch.std(rewards_total, dim=-1, keepdim=True)
 
-                gradient_asu = torch.stack(steps_asu_grad, dim=1)
-                gradient_asu = torch.mean(gradient_asu, dim=-1)
+                gradient_asu = torch.mean(stacked_asu_grad, dim=-1)
 
+                # Calculate MDD using numpy
+                mdd = self.cal_MDD_numpy(agent_wealth)
+                # Convert mdd to tensor for torch.mean and ensure it has requires_grad=True
+                mdd_tensor = torch.from_numpy(mdd).float().to(self.args.device).requires_grad_(True)
+                rewards_mdd = -2 * (mdd_tensor - 0.5)
+
+                # Combine all rewards
                 if self.args.rho:
-                    # steps_log_p_rho is already a tensor, no need to stack
-                    gradient_rho = steps_log_p_rho
-                    gradient_rho = torch.mean(gradient_rho, dim=-1)
-                    gradient_rho = torch.clamp(gradient_rho, -1, 1)
+                    if self.args.msu_bool and stacked_log_p_rho is not None:
+                        gradient_rho = torch.mean(stacked_log_p_rho.to(self.args.device), dim=-1)
+                        gradient_rho = torch.clamp(gradient_rho, -1, 1)
+                    else:
+                        gradient_rho = torch.tensor(0.0, device=self.args.device, requires_grad=True)
 
                     loss = torch.mean(rewards_total) + self.args.rho * torch.mean(rewards_mdd) \
                             - self.args.eta * torch.mean(gradient_asu) \
@@ -191,33 +228,39 @@ class RLAgent():
 
     def evaluation(self, logger=None):
         self.__set_test()
-        states, masks = self.env.reset()
+        with torch.no_grad():
+            states, masks = self.env.reset()
 
-        steps = 0
-        batch_size = states[0].shape[0]
+            steps = 0
+            batch_size = states[0].shape[0]
 
-        agent_wealth = np.ones((batch_size, 1), dtype=np.float32)
-        rho_record = []
-        while True:
-            steps += 1
-            x_a = torch.from_numpy(states[0]).to(self.args.device)
-            masks = torch.from_numpy(masks).to(self.args.device)
-            if self.args.msu_bool:
-                x_m = torch.from_numpy(states[1]).to(self.args.device)
-            else:
-                x_m = None
+            agent_wealth = np.ones((batch_size, 1), dtype=np.float32)
+            rho_record = []
+            while True:
+                steps += 1
+                x_a = torch.from_numpy(states[0]).to(self.args.device)
+                masks = torch.from_numpy(masks).to(self.args.device)
+                if self.args.msu_bool:
+                    x_m = torch.from_numpy(states[1]).to(self.args.device)
+                else:
+                    x_m = None
 
-            weights, rho, _, _ \
-                = self.actor(x_a, x_m, masks, deterministic=True)
-            next_states, rewards, _, masks, done, info = self.env.step(weights, rho.detach().cpu().numpy())
+                weights, rho, _, _ \
+                    = self.actor(x_a, x_m, masks, deterministic=True)
+                
+                # Convert weights and rho to numpy for environment step
+                weights_np = weights.detach().cpu().numpy().astype(np.float32)
+                rho_np = rho.detach().cpu().numpy().astype(np.float32)
+                
+                next_states, rewards, _, masks, done, info = self.env.step(weights_np, rho_np)
 
-            agent_wealth = np.concatenate((agent_wealth, info['total_value'][..., None]), axis=-1)
-            states = next_states
+                agent_wealth = np.concatenate((agent_wealth, info['total_value'][..., None]), axis=1)
+                states = next_states
 
-            if done:
-                break
+                if done:
+                    break
 
-        return agent_wealth
+            return agent_wealth
 
     def clip_grad_norms(self, param_groups, max_norm=math.inf):
         """
@@ -249,15 +292,23 @@ class RLAgent():
         self.actor.eval()
         self.env.set_test()
 
-    def cal_MDD(self, agent_wealth):
-        drawdown = (np.maximum.accumulate(agent_wealth, axis=-1) - agent_wealth) / \
-                   np.maximum.accumulate(agent_wealth, axis=-1)
-        MDD = np.max(drawdown, axis=-1)
-        return MDD[..., None].astype(np.float32)
+    def cal_MDD_numpy(self, wealth):
+        """Calculate Maximum Drawdown using numpy arrays"""
+        max_wealth = np.maximum.accumulate(wealth, axis=1)
+        drawdown = (wealth - max_wealth) / max_wealth
+        mdd = np.min(drawdown, axis=1)
+        return mdd
+
+    def cal_MDD(self, wealth):
+        """Calculate Maximum Drawdown using PyTorch tensors"""
+        max_wealth = torch.maximum.accumulate(wealth, dim=1)
+        drawdown = (wealth - max_wealth) / max_wealth
+        mdd = torch.min(drawdown, dim=1)[0]
+        return mdd
 
     def cal_CR(self, agent_wealth):
         pr = np.mean(agent_wealth[:, 1:] / agent_wealth[:, :-1] - 1, axis=-1, keepdims=True)
-        mdd = self.cal_MDD(agent_wealth)
+        mdd = self.cal_MDD_numpy(agent_wealth)
         softplus_mdd = np.log(1 + np.exp(mdd))
         CR = pr / softplus_mdd
         return CR

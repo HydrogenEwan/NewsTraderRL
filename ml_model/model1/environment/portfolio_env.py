@@ -519,7 +519,10 @@ class PortfolioEnv(object):
         self.sim = PortfolioSim(num_assets=self.num_assets, fee=fee, time_cost=time_cost, allow_short=allow_short)
 
     def step(self, action, p, simulation=False):
-        weights = action
+        # Ensure weights and p are numpy arrays
+        weights = np.asarray(action, dtype=np.float32)
+        p = np.asarray(p, dtype=np.float32)
+        
         if simulation:
             raise NotImplementedError
         else:

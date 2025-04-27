@@ -10,7 +10,7 @@ import pandas as pd
 import yfinance as yf
 import matplotlib.pyplot as plt
 import seaborn as sns
-from data_collection import create_multi_industry_classification
+from .data_collection import create_multi_industry_classification
 
 # Select 10 companies from DJIA
 selected_companies = [

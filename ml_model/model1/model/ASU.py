@@ -3,7 +3,6 @@ import math
 import torch
 import torch.nn as nn
 
-
 class nconv(nn.Module):
     def __init__(self):
         super(nconv, self).__init__()
@@ -267,3 +266,4 @@ class ASU(nn.Module):
         score = 1 / ((-x).exp() + 1)
         score[mask] = -math.inf
         return score
+

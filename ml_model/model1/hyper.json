@@ -10,7 +10,7 @@
     "max_steps": 12,
     "gamma": 0.05,
     "tau": 0.001,
-    "batch_size": 37,
+    "batch_size": 60,
     "use_gpu": true,
     "addaptiveadj":true,
     "trade_mode": "M",
@@ -21,7 +21,6 @@
         5,
         4
     ],
-    "num_assets": 30,
     "G": 4,
     "mode": "train",
     "num_rounds": 80000,
