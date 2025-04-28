@@ -13,10 +13,10 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 TEST_DATES = [
-    "2009-12-30"
+    "2011-10-30"
 ]
 
-ZERO_SENT = 0.0
+ZERO_SENT = 0
 
 if __name__ == "__main__":
     helper = MlModelHelper()
@@ -47,7 +47,7 @@ if __name__ == "__main__":
     for dt in TEST_DATES:
         for ticker in TARGET_TICKERS:
             if ticker not in date_ticker_metrics[dt]:
-                date_ticker_metrics[dt][ticker].append((0.0, 0.0, 0.0))
+                date_ticker_metrics[dt][ticker].append((10.0, 10.0, 10.0))
 
     date_results = {}
     for dt, tk_dict in date_ticker_metrics.items():

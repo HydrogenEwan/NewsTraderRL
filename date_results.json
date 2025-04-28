@@ -1,0 +1,310 @@
+{
+  "2011-10-30": {
+    "CVX": {
+      "avg_score": 0.0
+    },
+    "GD": {
+      "avg_score": 0.0
+    },
+    "GE": {
+      "avg_score": 0.0
+    },
+    "GM": {
+      "avg_score": -0.3339765845204227
+    },
+    "GOOGL": {
+      "avg_score": 0.0
+    },
+    "GS": {
+      "avg_score": 0.0
+    },
+    "IBM": {
+      "avg_score": 0.0
+    },
+    "INTC": {
+      "avg_score": 0.0
+    },
+    "INTU": {
+      "avg_score": 0.0
+    },
+    "MDT": {
+      "avg_score": 0.9953895211219788
+    },
+    "MET": {
+      "avg_score": 0.0
+    },
+    "MRK": {
+      "avg_score": 0.0
+    },
+    "MSFT": {
+      "avg_score": 0.0
+    },
+    "NFLX": {
+      "avg_score": 0.0
+    },
+    "ORCL": {
+      "avg_score": 0.9814451368484916
+    },
+    "PEP": {
+      "avg_score": 0.0
+    },
+    "AAPL": {
+      "avg_score": 10.0
+    },
+    "ABBV": {
+      "avg_score": 10.0
+    },
+    "ABT": {
+      "avg_score": 10.0
+    },
+    "ACN": {
+      "avg_score": 10.0
+    },
+    "ADBE": {
+      "avg_score": 10.0
+    },
+    "AIG": {
+      "avg_score": 10.0
+    },
+    "AMD": {
+      "avg_score": 10.0
+    },
+    "AMGN": {
+      "avg_score": 10.0
+    },
+    "AMT": {
+      "avg_score": 10.0
+    },
+    "AMZN": {
+      "avg_score": 10.0
+    },
+    "AVGO": {
+      "avg_score": 10.0
+    },
+    "AXP": {
+      "avg_score": 10.0
+    },
+    "BA": {
+      "avg_score": 10.0
+    },
+    "BAC": {
+      "avg_score": 10.0
+    },
+    "BIIB": {
+      "avg_score": 10.0
+    },
+    "BK": {
+      "avg_score": 10.0
+    },
+    "BKNG": {
+      "avg_score": 10.0
+    },
+    "BLK": {
+      "avg_score": 10.0
+    },
+    "BMY": {
+      "avg_score": 10.0
+    },
+    "BRK.B": {
+      "avg_score": 10.0
+    },
+    "C": {
+      "avg_score": 10.0
+    },
+    "CAT": {
+      "avg_score": 10.0
+    },
+    "CHTR": {
+      "avg_score": 10.0
+    },
+    "CL": {
+      "avg_score": 10.0
+    },
+    "CMCSA": {
+      "avg_score": 10.0
+    },
+    "COF": {
+      "avg_score": 10.0
+    },
+    "COP": {
+      "avg_score": 10.0
+    },
+    "COST": {
+      "avg_score": 10.0
+    },
+    "CRM": {
+      "avg_score": 10.0
+    },
+    "CSCO": {
+      "avg_score": 10.0
+    },
+    "CVS": {
+      "avg_score": 10.0
+    },
+    "DHR": {
+      "avg_score": 10.0
+    },
+    "DIS": {
+      "avg_score": 10.0
+    },
+    "DOW": {
+      "avg_score": 10.0
+    },
+    "DUK": {
+      "avg_score": 10.0
+    },
+    "EMR": {
+      "avg_score": 10.0
+    },
+    "EXC": {
+      "avg_score": 10.0
+    },
+    "F": {
+      "avg_score": 10.0
+    },
+    "FDX": {
+      "avg_score": 10.0
+    },
+    "GILD": {
+      "avg_score": 10.0
+    },
+    "GOOG": {
+      "avg_score": 10.0
+    },
+    "HD": {
+      "avg_score": 10.0
+    },
+    "HON": {
+      "avg_score": 10.0
+    },
+    "ISRG": {
+      "avg_score": 10.0
+    },
+    "JNJ": {
+      "avg_score": 10.0
+    },
+    "JPM": {
+      "avg_score": 10.0
+    },
+    "KHC": {
+      "avg_score": 10.0
+    },
+    "KMI": {
+      "avg_score": 10.0
+    },
+    "KO": {
+      "avg_score": 10.0
+    },
+    "LIN": {
+      "avg_score": 10.0
+    },
+    "LLY": {
+      "avg_score": 10.0
+    },
+    "LMT": {
+      "avg_score": 10.0
+    },
+    "LOW": {
+      "avg_score": 10.0
+    },
+    "MA": {
+      "avg_score": 10.0
+    },
+    "MCD": {
+      "avg_score": 10.0
+    },
+    "MDLZ": {
+      "avg_score": 10.0
+    },
+    "META": {
+      "avg_score": 10.0
+    },
+    "MMM": {
+      "avg_score": 10.0
+    },
+    "MS": {
+      "avg_score": 10.0
+    },
+    "NEE": {
+      "avg_score": 10.0
+    },
+    "NKE": {
+      "avg_score": 10.0
+    },
+    "NVDA": {
+      "avg_score": 10.0
+    },
+    "PFE": {
+      "avg_score": 10.0
+    },
+    "PG": {
+      "avg_score": 10.0
+    },
+    "PM": {
+      "avg_score": 10.0
+    },
+    "PYPL": {
+      "avg_score": 10.0
+    },
+    "QCOM": {
+      "avg_score": 10.0
+    },
+    "RTX": {
+      "avg_score": 10.0
+    },
+    "SBUX": {
+      "avg_score": 10.0
+    },
+    "SO": {
+      "avg_score": 10.0
+    },
+    "SPG": {
+      "avg_score": 10.0
+    },
+    "T": {
+      "avg_score": 10.0
+    },
+    "TGT": {
+      "avg_score": 10.0
+    },
+    "TMO": {
+      "avg_score": 10.0
+    },
+    "TMUS": {
+      "avg_score": 10.0
+    },
+    "TXN": {
+      "avg_score": 10.0
+    },
+    "UNH": {
+      "avg_score": 10.0
+    },
+    "UNP": {
+      "avg_score": 10.0
+    },
+    "UPS": {
+      "avg_score": 10.0
+    },
+    "USB": {
+      "avg_score": 10.0
+    },
+    "V": {
+      "avg_score": 10.0
+    },
+    "VZ": {
+      "avg_score": 10.0
+    },
+    "WBA": {
+      "avg_score": 10.0
+    },
+    "WFC": {
+      "avg_score": 10.0
+    },
+    "WMT": {
+      "avg_score": 10.0
+    },
+    "XOM": {
+      "avg_score": 10.0
+    }
+  }
+}
