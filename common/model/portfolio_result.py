@@ -60,14 +60,14 @@ class PortfolioResult(DailyBasisModel):
             raise ValueError("Sum of absolute portfolio weights cannot be zero.")
 
         scaled = [w / abs_sum for w in weights]
-        rounded = [round(w, 2) for w in scaled]
-        abs_total = round(sum(abs(w) for w in rounded), 2)
-        diff = round(1.00 - abs_total, 2)
+        rounded = [round(w, 4) for w in scaled]
+        abs_total = round(sum(abs(w) for w in rounded), 4)
+        diff = round(1.0000 - abs_total, 4)
 
         if diff != 0:
             idx = max(range(len(rounded)), key=lambda i: abs(rounded[i]))
             correction = diff if rounded[idx] >= 0 else -diff
-            rounded[idx] = round(rounded[idx] + correction, 2)
+            rounded[idx] = round(rounded[idx] + correction, 4)
 
         return rounded
 
