@@ -2,7 +2,7 @@ import click
 
 from common.config.target_tickers import TARGET_TICKERS
 from data.ohlc.yahoo_ohlc_pipeline import YahooOhlcPipeline
-# from web.app.initialize import create_app
+
 
 
 @click.group()
@@ -33,14 +33,6 @@ def run_yahoo_pipeline(ticker, start, end, issimulation):
             print(f"[INFO] Running pipeline for {t}")
             pipeline.run_historical_pipeline(ticker=t, start=start, end=end)
 
-
-# @cli.command()
-# @click.option('--host', default='0.0.0.0', help='Host to run the web server on')
-# @click.option('--port', default=5000, help='Port to run the web server on')
-# @click.option('--debug', is_flag=True, help='Run Flask in debug mode')
-# def run_web(host, port, debug):
-#     app = create_app()
-#     app.run(host=host, port=port, debug=debug)
 
 
 if __name__ == '__main__':

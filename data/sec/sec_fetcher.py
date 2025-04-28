@@ -1,4 +1,5 @@
 '''Module for fetching SEC data'''
+import time
 import uuid
 import re
 from pathlib import Path
@@ -41,13 +42,17 @@ class SecFetcher(DataFetcher):
                 - text: Cleaned filing text content
                 - datetime: Unix timestamp of filing
         """
+
+        # start_dt = datetime.strptime(start, "%Y-%m-%d").date()
+        # end_dt = datetime.strptime(end, "%Y-%m-%d").date()
+        #
         # if tickers is None:
         #     tickers = self.tickers
         # my_filings = filings(cik_lookup=tickers,
         #                 filing_type=FilingType.FILING_10Q,
         #                 user_agent="Your name (123@gmail.com)",
-        #                 start_date=start,
-        #                 end_date=end)
+        #                 start_date=start_dt,
+        #                 end_date=end_dt)
         # save_dir = DOWNLOAD_DIR / f"{start}_to_{end}"
         # print(f"Downloading filings to: {save_dir}")
         # my_filings.save(str(save_dir))
@@ -67,6 +72,7 @@ class SecFetcher(DataFetcher):
 
         for t in tickers:
             try:
+                time.sleep(1 * 60)
                 f = filings(cik_lookup=t,
                             filing_type=FilingType.FILING_10Q,
                             start_date=start_dt, end_date=end_dt,
