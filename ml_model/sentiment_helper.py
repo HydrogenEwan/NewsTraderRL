@@ -65,6 +65,7 @@ class SAHelper:
 if __name__ == "__main__":
     sa_helper = SAHelper()
     
+    print("\SENTIMENT TEST ==================================")
     ticker = "NFLX"
     news = sa_helper.get_financial_news(ticker, "2011-10-30")
     labels, score = sa_helper.get_sentiment_analysis_result(ticker, "2011-10-30")

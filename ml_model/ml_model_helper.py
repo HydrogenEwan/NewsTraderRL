@@ -95,16 +95,11 @@ if __name__ == "__main__":
     print(f"[OHLC] {ohlc}")
     print(f"[TURNOVER] {ml_helper.get_aggregate_turnover('2009-10-01')}")
 
-    start = time.perf_counter()
-
     print("\nNEWS TEST ==================================")
     ticker = "NFLX"
     news = ml_helper.get_financial_news(ticker, "2011-10-30")
     for n in news:
         print(f"[News] {n}")
-
-    end = time.perf_counter()
-    print(f"Elapsed time: {end - start:.3f} seconds")
             
 
     print("\nEndOfDay TEST ==================================")
