@@ -11,10 +11,10 @@ from datetime import datetime
 from typing import List, Dict, Any
 from bson import ObjectId
 
-from data.financial_news.financial_csv_news_pipeline import FinancialCsvNewsPipeline
-from common.model.financial_news import FinancialNews
+from common.config.target_tickers import TARGET_TICKERS
 from common.infrastructure.mongodb.mongodb_client import MongoDbClient
 from common.config.db_config import MONGODB_COLLECTION_NEWS
+from data.financial_news.financial_csv_news_pipeline import FinancialCsvNewsPipeline
 
 
 class JSONEncoder(json.JSONEncoder):
@@ -36,9 +36,9 @@ def load_tickers(ticker_file: str) -> List[str]:
 
 def fetch_historical_news(
     csv_path: str,
-    ticker_file: str,
-    start_date: str = "2000-01-01",
-    end_date: str = "2009-12-31",
+    # ticker_file: str,
+    start_date: str = "1999-01-01",
+    end_date: str = "2015-12-31",
     output_dir: str = "../data/financial_news/csv",
     save_to_mongodb: bool = True
 ) -> Dict[str, List[Dict[str, Any]]]:
@@ -53,12 +53,13 @@ def fetch_historical_news(
     os.makedirs(output_dir, exist_ok=True)
     
     # Load tickers
-    tickers = load_tickers(ticker_file)
+    # tickers = load_tickers(ticker_file)
+    tickers = TARGET_TICKERS
     if not tickers:
         logger.error("No tickers loaded. Exiting.")
         return {}
     
-    logger.info(f"Loaded {len(tickers)} tickers from {ticker_file}")
+    logger.info(f"Loaded {len(tickers)} tickers ")
     
     # Initialize pipeline
     pipeline = FinancialCsvNewsPipeline(csv_path)
@@ -127,16 +128,17 @@ def fetch_historical_news(
 def main():
     """Main function to run the script"""
     # Define paths
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    base_dir = os.path.dirname(script_dir)
-    csv_path = os.path.join(base_dir, "data", "financial_news", "csv", "keydev.csv")
-    ticker_file = os.path.join(script_dir, "tickers.json")
-    output_dir = os.path.join(base_dir, "data", "financial_news", "csv", "historical_news")
-    
+    # script_dir = os.path.dirname(os.path.abspath(__file__))
+    # base_dir = os.path.dirname(script_dir)
+    # csv_path = os.path.join(base_dir, "data", "financial_news", "csv", "keydev.csv")
+    csv_path = "/home/newstraderrl/data/news/keydev.csv"
+    # ticker_file = os.path.join(script_dir, "tickers.json")
+    # output_dir = os.path.join(base_dir, "data", "financial_news", "csv", "historical_news")
+    output_dir = "/home/newstraderrl/data/news/output/"
     # Fetch historical news and save to MongoDB
     fetch_historical_news(
         csv_path=csv_path,
-        ticker_file=ticker_file,
+        # ticker_file=ticker_file,
         output_dir=output_dir,
         save_to_mongodb=True
     )

@@ -41,21 +41,43 @@ class SecFetcher(DataFetcher):
                 - text: Cleaned filing text content
                 - datetime: Unix timestamp of filing
         """
+        # if tickers is None:
+        #     tickers = self.tickers
+        # my_filings = filings(cik_lookup=tickers,
+        #                 filing_type=FilingType.FILING_10Q,
+        #                 user_agent="Your name (123@gmail.com)",
+        #                 start_date=start,
+        #                 end_date=end)
+        # save_dir = DOWNLOAD_DIR / f"{start}_to_{end}"
+        # print(f"Downloading filings to: {save_dir}")
+        # my_filings.save(str(save_dir))
+        # # Process downloaded files
+        # downloaded_files = list(save_dir.glob('**/*.txt'))  # Recursively search for all .txt files
+        # # print(f"files are {downloaded_files}")
+        # print(f"Successfully downloaded {len(downloaded_files)} filing(s).")
+        # yield from self.extract_and_parse(downloaded_files)
+
         if tickers is None:
             tickers = self.tickers
-        my_filings = filings(cik_lookup=tickers,
-                        filing_type=FilingType.FILING_10Q,
-                        user_agent="Your name (123@gmail.com)",
-                        start_date=start,
-                        end_date=end)
+
         save_dir = DOWNLOAD_DIR / f"{start}_to_{end}"
-        print(f"Downloading filings to: {save_dir}")
-        my_filings.save(str(save_dir))
-        # Process downloaded files
-        downloaded_files = list(save_dir.glob('**/*.txt'))  # Recursively search for all .txt files
-        # print(f"files are {downloaded_files}")
-        print(f"Successfully downloaded {len(downloaded_files)} filing(s).")
-        yield from self.extract_and_parse(downloaded_files)
+        save_dir.mkdir(parents=True, exist_ok=True)
+        start_dt = datetime.strptime(start, "%Y-%m-%d").date()
+        end_dt = datetime.strptime(end, "%Y-%m-%d").date()
+
+        for t in tickers:
+            try:
+                f = filings(cik_lookup=t,
+                            filing_type=FilingType.FILING_10Q,
+                            start_date=start_dt, end_date=end_dt,
+                            user_agent="Your name (123@gmail.com)")
+                print(f"Downloading {t} filings …")
+                f.save(save_dir / t)
+                txt_files = list((save_dir / t).rglob("*.txt"))
+                print(f"{t}: {len(txt_files)} file downloaded")
+                yield from self.extract_and_parse(txt_files)
+            except Exception as e:
+                print(f"[WARN] {t} skip: {e}")
 
     def extract_and_parse(self, downloaded_files: list[Path]) -> Iterator:
         """Extract and parse downloaded SEC filing files.
