@@ -47,7 +47,7 @@ if __name__ == "__main__":
     for dt in TEST_DATES:
         for ticker in TARGET_TICKERS:
             if ticker not in date_ticker_metrics[dt]:
-                date_ticker_metrics[dt][ticker].append((10.0, 10.0, 10.0))
+                date_ticker_metrics[dt][ticker].append((0.0, 0.0, 0.0))
 
     date_results = {}
     for dt, tk_dict in date_ticker_metrics.items():
