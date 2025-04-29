@@ -19,8 +19,7 @@ class MlModelHelper:
         self.mongodb = MongoDbClient()
         self.kafka = KafkaClient()
         
-        ModelManager.get_model("sentiment")
-        ModelManager.get_model("fake_news")
+        ModelManager.load_all_models()
 
     def get_ohlc(self, ticker: str, date: str) -> Ohlc:
         """
@@ -145,20 +144,25 @@ if __name__ == "__main__":
     ml_helper = MlModelHelper()
 
     print("OHLC TEST ==================================")
-    ohlc = ml_helper.get_ohlc("MMM", "2009-10-01")
+    ohlc = ml_helper.get_ohlc("^GSPC", "1999-01-04")
     print(f"[OHLC] {ohlc}")
     print(f"[TURNOVER] {ml_helper.get_aggregate_turnover('2009-10-01')}")
 
+    start = time.perf_counter()
+
     print("\nNEWS TEST ==================================")
-    ticker = "UPS"
-    news = ml_helper.get_financial_news(ticker, "2009-12-30")
-    labels, score = ml_helper.get_sentiment_analysis_result(ticker, "2009-12-30")
+    ticker = "DUK"
+    news = ml_helper.get_financial_news(ticker, "2015-12-30")
+    labels, score = ml_helper.get_sentiment_analysis_result(ticker, "2015-12-30")
     for n, label in zip(news, labels):
         print(f"[News] {n}")
         print(f"[labls] {label}")
-        
+
     print(f"[SENTIMENT SCORE FOR {ticker}] {score}")
-        
+
+    end = time.perf_counter()
+    print(f"Elapsed time: {end - start:.3f} seconds")
+            
 
     print("\nEndOfDay TEST ==================================")
     listener_thread = threading.Thread(

@@ -13,21 +13,20 @@ class Ohlc(DailyBasisModel):
     low: float
     close: float
     volume: int
-    marketcap: float
+    turnover: float
 
-    @staticmethod
-    def from_yfinance_row(row: Any, ticker: str, marketcap: float) -> Ohlc:
-        mc = float(marketcap)
-        return Ohlc(
-            ticker=ticker,
-            date=row["Date"].to_pydatetime().date(),
-            open=float(row["Open"]),
-            high=float(row["High"]),
-            low=float(row["Low"]),
-            close=float(row["Close"]),
-            volume=int(row["Volume"]),
-            marketcap=mc
-        )
+    # @staticmethod
+    # def from_yfinance_row(row: Any, ticker: str) -> Ohlc:
+    #     return Ohlc(
+    #         ticker=ticker,
+    #         date=row["Date"].to_pydatetime().date(),
+    #         open=float(row["Open"]),
+    #         high=float(row["High"]),
+    #         low=float(row["Low"]),
+    #         close=float(row["Close"]),
+    #         volume=int(row["Volume"]),
+    #         turnover=row["Close"] * int(row["Volume"])
+    #     )
 
     @staticmethod
     def from_raw(doc: dict) -> Ohlc:
@@ -43,7 +42,7 @@ class Ohlc(DailyBasisModel):
             low=float(doc["low"]),
             close=float(doc["close"]),
             volume=int(doc["volume"]),
-            marketcap=float(doc["marketcap"])
+            turnover=float(doc["turnover"])
         )
 
     def to_dict(self) -> dict:
@@ -55,5 +54,5 @@ class Ohlc(DailyBasisModel):
             "low": self.low,
             "close": self.close,
             "volume": self.volume,
-            "marketcap": float(self.marketcap)
+            "turnover": float(self.turnover)
         }
