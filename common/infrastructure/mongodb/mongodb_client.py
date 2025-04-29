@@ -1,3 +1,4 @@
+from __future__ import annotations
 from pymongo import MongoClient
 from pymongo.collection import Collection
 from typing import Union, List, Dict, Optional, Any
@@ -5,9 +6,17 @@ from common.config import db_config
 
 
 class MongoDbClient:
+    _instance: Optional[MongoDbClient] = None
+
     def __init__(self):
         self._client = MongoClient(db_config.MONGODB_URI)
         self._db = self._client[db_config.MONGODB_DB_NAME]
+
+    @classmethod
+    def get_instance(cls) -> MongoDbClient:
+        if cls._instance is None:
+            cls._instance = cls()
+        return cls._instance
 
     def get_collection(self, collection_name: str) -> Collection:
         return self._db[collection_name]
@@ -81,4 +90,18 @@ class MongoDbClient:
             return list(cursor)
         except Exception as e:
             print(f"[MongoDbClient] aggregate failed: {e}")
+            return None
+
+    def get_latest_date(self, collection_name: str) -> Optional[str]:
+        try:
+            result = self.find(
+                collection_name=collection_name,
+                sort=[("date", -1)],
+                limit=1,
+                projection={"date": 1, "_id": 0}
+            )
+            latest = next(result, None)
+            return latest.get("date") if latest else None
+        except Exception as e:
+            print(f"[MongoDbClient] get_latest_date failed: {e}")
             return None

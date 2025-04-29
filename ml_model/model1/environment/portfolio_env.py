@@ -221,10 +221,8 @@ class DataGenerator():
             # Handle volume and market cap
             assets_states[i, :, :, 3] = np.nansum(tmp_states[i, :, 1:, :, 3], axis=-1)
             assets_states[i, :, :, 4] = np.nanmean(tmp_states[i, :, 1:, :, 4], axis=-1)
-            
-            # FIXME
-            if tmp_states.shape[-1] == 6:
-                assets_states[i, :, :, 5] = np.nanmean(tmp_states[i, :, 1:, :, 5], axis=-1)
+            assets_states[i, :, :, 5] = np.nanmean(tmp_states[i, :, 1:, :, 5], axis=-1)
+            assets_states[i, :, :, 6] = np.nanmean(tmp_states[i, :, 1:, :, 6], axis=-1)
                 
             if self.allow_short:
                 #Average any features per week of the original market data

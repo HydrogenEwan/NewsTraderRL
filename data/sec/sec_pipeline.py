@@ -36,6 +36,8 @@ Example Usage:
 
 from tqdm import tqdm
 from typing import Iterator
+
+from common.config.db_config import MONGODB_COLLECTION_SEC
 from common.interface.data_pipeline import DataPipeline
 from common.model.simulation import SimulationItem
 from common.config.target_tickers import TARGET_TICKERS
@@ -63,7 +65,7 @@ class SecPipeline(DataPipeline):
         run_historical_pipeline: Fetches and stores historical SEC filings data
         run_simulation_pipeline: Processes SEC data for simulation purposes
     """
-    def __init__(self, collection="sec_data"):
+    def __init__(self, collection=MONGODB_COLLECTION_SEC):
         super().__init__()
         self.parser = SecParser()
         self.fetcher = SecFetcher(self.parser, TARGET_TICKERS)
@@ -109,3 +111,13 @@ class SecPipeline(DataPipeline):
 
     def run_simulation_pipeline(self, ticker: str, start: str, end: str, batch_size: int = 100):
         pass
+
+
+if __name__ == "__main__":
+    pipeline = SecPipeline()
+    pipeline.run_historical_pipeline(
+        start="1999-01-01",
+        end="2015-12-31",
+        tickers=TARGET_TICKERS,
+        batch_size=100
+    )

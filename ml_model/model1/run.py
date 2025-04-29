@@ -15,7 +15,7 @@ from .utils.functions import *
 from .agent import *
 from .environment.portfolio_env import PortfolioEnv
 from ml_model.ml_model_helper import MlModelHelper
-from common.config.db_config import MONGODB_COLLECTION_OHLC
+from common.config.db_config import MONGODB_COLLECTION_OHLC, MONGODB_COLLECTION_SENTIMENT, MONGODB_COLLECTION_SEC
 from common.config.target_tickers import TARGET_TICKERS
 
 import psutil
@@ -32,34 +32,53 @@ def fetch_data_from_mongodb(target_tickers, start_date=None, end_date=None):
         
     Returns:
         tuple: (stocks_data, market_history)
-            stocks_data: numpy array of shape (num_stocks, num_days, 5)
-            market_history: numpy array of shape (num_days, 5)
+            stocks_data: numpy array of shape (num_stocks, num_days, 7)  # 7 features for stocks
+            market_history: numpy array of shape (num_days, 5)  # 5 features for market
     """
     helper = MlModelHelper()
+    logger = logging.getLogger()
+    
+    logger.info(f"Starting data fetch for {len(target_tickers)} tickers")
+    if start_date:
+        logger.info(f"Start date: {start_date}")
+    if end_date:
+        logger.info(f"End date: {end_date}")
     
     # Initialize data structures
     all_dates = set()
     stock_data_dict = {ticker: [] for ticker in target_tickers}
     
-    # Fetch data for each ticker
-    for ticker in target_tickers:
-        query = {"ticker": ticker}
-        if start_date:
-            query["date"] = {"$gte": start_date}
-        if end_date:
-            query["date"] = {"$lte": end_date}
+    # First, get all dates from OHLC data
+    logger.info("Fetching OHLC data for all tickers...")
+    for i, ticker in enumerate(target_tickers):
+        logger.info(f"Processing ticker {i+1}/{len(target_tickers)}: {ticker}")
+        try:
+            query = {"ticker": ticker}
+            if start_date:
+                query["date"] = {"$gte": start_date}
+            if end_date:
+                query["date"] = {"$lte": end_date}
+                
+            doc_count = 0
+            for doc in helper.mongodb.find(MONGODB_COLLECTION_OHLC, query):
+                date = doc['date']
+                all_dates.add(date)
+                stock_data_dict[ticker].append({
+                    'date': date,
+                    'close': doc['close'],
+                    'high': doc['high'],
+                    'low': doc['low'],
+                    'volume': doc['volume'],
+                    'marketcap': doc.get('marketcap', 0.0),  # Default to 0.0 if not present
+                    'sentiment': 0.0,  # Default sentiment score
+                    'sec_score': 0.0   # Default SEC score
+                })
+                doc_count += 1
             
-        for doc in helper.mongodb.find(MONGODB_COLLECTION_OHLC, query):
-            date = doc['date']
-            all_dates.add(date)
-            stock_data_dict[ticker].append({
-                'date': date,
-                'close': doc['close'],
-                'high': doc['high'],
-                'low': doc['low'],
-                'volume': doc['volume'],
-                'marketcap': doc.get('marketcap')
-            })
+            logger.info(f"Found {doc_count} OHLC records for {ticker}")
+        except Exception as e:
+            logger.error(f"Error fetching OHLC data for {ticker}: {str(e)}")
+            continue
     
     if not all_dates:
         raise ValueError(f"No data found for tickers {target_tickers} in MongoDB. Please check if the tickers exist and have data.")
@@ -67,11 +86,92 @@ def fetch_data_from_mongodb(target_tickers, start_date=None, end_date=None):
     # Sort dates and create date index mapping
     all_dates = sorted(list(all_dates))
     date_to_idx = {date: idx for idx, date in enumerate(all_dates)}
+    logger.info(f"Found {len(all_dates)} unique dates across all tickers")
+    
+    # Now get sentiment and SEC scores for all tickers and dates
+    logger.info("Fetching sentiment and SEC scores...")
+    
+    # Create a mapping of ticker+date to sentiment and SEC scores
+    sentiment_cache = {}
+    sec_cache = {}
+    
+    # Batch process sentiment scores with direct MongoDB access for better performance
+    logger.info("Batch processing sentiment scores...")
+    for i, ticker in enumerate(target_tickers):
+        logger.info(f"Processing sentiment for ticker {i+1}/{len(target_tickers)}: {ticker}")
+        
+        # Get all unique dates for this ticker
+        ticker_dates = [data_point['date'] for data_point in stock_data_dict[ticker]]
+        
+        # Process in batches of 100 dates to reduce the number of database calls
+        batch_size = 100
+        for j in range(0, len(ticker_dates), batch_size):
+            batch_dates = ticker_dates[j:j+batch_size]
+            logger.info(f"  Processing batch {j//batch_size + 1}/{(len(ticker_dates) + batch_size - 1)//batch_size} ({len(batch_dates)} dates)")
+            
+            # Create a query to fetch sentiment for all dates in this batch
+            query = {
+                "ticker": ticker,
+                "date": {"$in": batch_dates}
+            }
+            
+            try:
+                # Fetch all sentiment scores for this batch in one query
+                sentiment_docs = list(helper.mongodb.find(MONGODB_COLLECTION_SENTIMENT, query))
+                
+                # Process the results
+                for doc in sentiment_docs:
+                    date = doc['date']
+                    sentiment_cache[f"{ticker}_{date}"] = doc.get('avg_score', 0.0)
+            except Exception as e:
+                logger.warning(f"Error fetching sentiment batch for {ticker}: {str(e)}")
+                # Continue with default values for this batch
+    
+    # Batch process SEC scores using the helper function
+    logger.info("Batch processing SEC scores...")
+    for i, ticker in enumerate(target_tickers):
+        logger.info(f"Processing SEC scores for ticker {i+1}/{len(target_tickers)}: {ticker}")
+        
+        # Get all unique dates for this ticker
+        ticker_dates = [data_point['date'] for data_point in stock_data_dict[ticker]]
+        
+        # Process in batches of 100 dates
+        batch_size = 100
+        for j in range(0, len(ticker_dates), batch_size):
+            batch_dates = ticker_dates[j:j+batch_size]
+            logger.info(f"  Processing batch {j//batch_size + 1}/{(len(ticker_dates) + batch_size - 1)//batch_size} ({len(batch_dates)} dates)")
+            
+            # Process each date in the batch using the helper function
+            for date in batch_dates:
+                try:
+                    # Use the helper function to get SEC score
+                    sec_score = helper.get_sec_score(ticker, date)
+                    sec_cache[f"{ticker}_{date}"] = sec_score
+                except Exception as e:
+                    logger.warning(f"Error fetching SEC score for {ticker} on {date}: {str(e)}")
+                    sec_cache[f"{ticker}_{date}"] = 0.0  # Default to neutral SEC score
+    
+    # Now update the stock data with sentiment and SEC scores from the cache
+    logger.info("Updating stock data with sentiment and SEC scores...")
+    for i, ticker in enumerate(target_tickers):
+        for j, data_point in enumerate(stock_data_dict[ticker]):
+            if j % 100 == 0 and j > 0:
+                logger.info(f"  Processed {j}/{len(stock_data_dict[ticker])} dates for {ticker}")
+                
+            date = data_point['date']
+            cache_key = f"{ticker}_{date}"
+            
+            # Get sentiment score from cache or use default
+            data_point['sentiment'] = sentiment_cache.get(cache_key, 0.0)
+            
+            # Get SEC score from cache or use default
+            data_point['sec_score'] = sec_cache.get(cache_key, 0.0)
     
     # Create numpy arrays
     num_stocks = len(target_tickers)
     num_days = len(all_dates)
-    stocks_data = np.zeros((num_stocks, num_days, 5))
+    stocks_data = np.zeros((num_stocks, num_days, 7))  # 7 features for stocks
+    logger.info(f"Creating stock data array with shape: {stocks_data.shape}")
     
     # Fill stock data
     for i, ticker in enumerate(target_tickers):
@@ -82,32 +182,44 @@ def fetch_data_from_mongodb(target_tickers, start_date=None, end_date=None):
                 data_point['high'],
                 data_point['low'],
                 data_point['volume'],
-                data_point['marketcap']
+                data_point['marketcap'],
+                data_point['sentiment'],
+                data_point['sec_score']
             ]
     
-    # Fetch market data (S&P 500 index) from MongoDB
+    # Fetch market data (S&P 100 index) from MongoDB
+    logger.info("Fetching market data (S&P 100)...")
     market_data_dict = {}
-    market_query = {"ticker": "^GSPC"}
-    if start_date:
-        market_query["date"] = {"$gte": start_date}
-    if end_date:
-        market_query["date"] = {"$lte": end_date}
-    
-    for doc in helper.mongodb.find(MONGODB_COLLECTION_OHLC, market_query):
-        date = doc['date']
-        if date in date_to_idx:  # Only include dates that match our stock data
-            market_data_dict[date] = {
-                'close': doc['close'],
-                'high': doc['high'],
-                'low': doc['low'],
-                'volume': doc['volume'],
-                'marketcap': doc.get('marketcap')
-            }
+    try:
+        market_query = {"ticker": "^GSPC"}
+        if start_date:
+            market_query["date"] = {"$gte": start_date}
+        if end_date:
+            market_query["date"] = {"$lte": end_date}
+        
+        market_doc_count = 0
+        for doc in helper.mongodb.find(MONGODB_COLLECTION_OHLC, market_query):
+            date = doc['date']
+            if date in date_to_idx:  # Only include dates that match our stock data
+                market_data_dict[date] = {
+                    'close': doc['close'],
+                    'high': doc['high'],
+                    'low': doc['low'],
+                    'volume': doc['volume'],
+                    'marketcap': doc.get('marketcap', 0.0)
+                }
+                market_doc_count += 1
+        
+        logger.info(f"Found {market_doc_count} market data records")
+    except Exception as e:
+        logger.error(f"Error fetching market data: {str(e)}")
     
     # Create market history array
-    market_history = np.zeros((num_days, 5))
+    market_history = np.zeros((num_days, 5))  # 5 features for market
+    logger.info(f"Creating market history array with shape: {market_history.shape}")
     
     # Fill market data
+    missing_market_dates = 0
     for date, idx in date_to_idx.items():
         if date in market_data_dict:
             data = market_data_dict[date]
@@ -120,10 +232,13 @@ def fetch_data_from_mongodb(target_tickers, start_date=None, end_date=None):
             ]
         else:
             # If market data is missing for a date, use the mean of stock data for that day
-            market_history[idx] = np.mean(stocks_data[:, idx], axis=0)
-            logger = logging.getLogger()
-            logger.warning(f"Market data missing for date {date}. Using mean of stock data instead.")
+            market_history[idx] = np.mean(stocks_data[:, idx, :5], axis=0)  # Only use the first 5 features
+            missing_market_dates += 1
     
+    if missing_market_dates > 0:
+        logger.warning(f"Market data missing for {missing_market_dates} dates. Using mean of stock data instead.")
+    
+    logger.info("Data fetching complete!")
     return stocks_data, market_history
 
 
@@ -131,6 +246,26 @@ def run(func_args):
     if func_args.seed != -1:
         torch.manual_seed(func_args.seed)
         np.random.seed(func_args.seed)
+
+    # Configure logging
+    logger = logging.getLogger()
+    logger.setLevel(logging.INFO)
+    
+    # Create console handler with a higher log level
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.INFO)
+    
+    # Create formatter and add it to the handler
+    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+    console_handler.setFormatter(formatter)
+    
+    # Add the handler to the logger
+    logger.addHandler(console_handler)
+    
+    # Log the hyperparameters
+    logger.info("Starting training with the following hyperparameters:")
+    for key, value in func_args.__dict__.items():
+        logger.info(f"  {key}: {value}")
 
     data_prefix = 'ml_model/model1/data/' + func_args.market + '/'
     matrix_path = data_prefix + func_args.relation_file
@@ -179,7 +314,9 @@ def run(func_args):
             logger.info(f"Using all {len(TARGET_TICKERS)} target tickers from config")
             
             # Fetch data from MongoDB using all tickers
+            logger.info("Fetching data from MongoDB...")
             stocks_data, market_history = fetch_data_from_mongodb(TARGET_TICKERS)
+            logger.info(f"Data fetch complete. Stocks data shape: {stocks_data.shape}, Market history shape: {market_history.shape}")
             
             # Update num_assets in func_args to match the actual number of tickers
             func_args.num_assets = stocks_data.shape[0]
@@ -187,6 +324,7 @@ def run(func_args):
             
             # Load and adjust the adjacency matrix if needed
             try:
+                logger.info(f"Loading adjacency matrix from {matrix_path}")
                 A = torch.from_numpy(np.load(matrix_path)).float().to(func_args.device)
                 # Check if the adjacency matrix dimensions match the number of tickers
                 if A.shape[0] != func_args.num_assets or A.shape[1] != func_args.num_assets:
@@ -207,28 +345,30 @@ def run(func_args):
             def print_memory_usage(tag=""):
                 process = psutil.Process()
                 mem = process.memory_info().rss / 1024 / 1024  # in MB
-                print(f"[{tag}] Current RAM usage: {mem:.2f} MB")
+                logger.info(f"[{tag}] Current RAM usage: {mem:.2f} MB")
 
             # After loading stocks_data and market_history
-            print("stocks_data shape:", stocks_data.shape)
-            print("market_history shape:", market_history.shape)
-            print("stocks_data size (MB):", stocks_data.nbytes / 1024 / 1024)
-            print("market_history size (MB):", market_history.nbytes / 1024 / 1024)
+            logger.info("stocks_data shape: %s", stocks_data.shape)
+            logger.info("market_history shape: %s", market_history.shape)
+            logger.info("stocks_data size (MB): %.2f", stocks_data.nbytes / 1024 / 1024)
+            logger.info("market_history size (MB): %.2f", market_history.nbytes / 1024 / 1024)
             print_memory_usage("After loading data")
 
-            print("CUDA available:", torch.cuda.is_available())
-            print("Current device:", torch.cuda.current_device())
-            print("Device count:", torch.cuda.device_count())
-            print("Device name:", torch.cuda.get_device_name(0))
+            logger.info("CUDA available: %s", torch.cuda.is_available())
+            logger.info("Current device: %s", torch.cuda.current_device())
+            logger.info("Device count: %s", torch.cuda.device_count())
+            logger.info("Device name: %s", torch.cuda.get_device_name(0))
             
             allow_short = True
 
+            logger.info("Creating portfolio environment...")
             env = PortfolioEnv(assets_data=stocks_data, market_data=market_history,
                                in_features=func_args.in_features, val_idx=test_idx, test_idx=test_idx,
                                batch_size=func_args.batch_size, window_len=func_args.window_len, trade_len=func_args.trade_len,
                                max_steps=func_args.max_steps, mode=func_args.mode, norm_type=func_args.norm_type,
                                allow_short=allow_short)
 
+            logger.info("Creating RL actor and agent...")
             supports = [A]
             actor = RLActor(supports, func_args).to(func_args.device)
             agent = RLAgent(env, actor, func_args)
@@ -272,12 +412,12 @@ def run(func_args):
                     })
 
                     if metrics['CR'] > max_cr:
-                        print('New Best CR Policy!!!!')
+                        logger.info('New Best CR Policy!!!!')
                         max_cr = metrics['CR']
                         torch.save(actor, os.path.join(model_save_dir, 'best_cr-'+str(epoch)+'.pkl'))
 
                     print_memory_usage(f"End of epoch {epoch}") #debugging code for GPU
-                    print(f"[run.py] Allocated: {torch.cuda.memory_allocated() / 1024**3:.2f} GB, Reserved: {torch.cuda.memory_reserved() / 1024**3:.2f} GB")
+                    logger.info(f"[run.py] Allocated: {torch.cuda.memory_allocated() / 1024**3:.2f} GB, Reserved: {torch.cuda.memory_reserved() / 1024**3:.2f} GB")
                     torch.cuda.empty_cache()
                     gc.collect()
                     
@@ -290,6 +430,7 @@ def run(func_args):
                                        100 * metrics['MDD'], metrics['CR'], metrics['DDR']
                                    ))
             except KeyboardInterrupt:
+                logger.info("Training interrupted by user. Saving model...")
                 torch.save(actor, os.path.join(model_save_dir, 'final_model.pkl'))
                 torch.save(agent.optimizer.state_dict(), os.path.join(model_save_dir, 'final_optimizer.pkl'))
         except Exception as e:

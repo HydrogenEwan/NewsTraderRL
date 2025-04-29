@@ -1,4 +1,5 @@
 import time
+from datetime import datetime
 
 from common.config.db_config import MONGODB_COLLECTION_OHLC
 from common.infrastructure.kafka.kafka_client import KafkaClient
@@ -12,27 +13,19 @@ class YahooOhlcPipeline(DataPipeline):
     def __init__(self):
         super().__init__()
 
-    def run_historical_pipeline(self, ticker: str, start: str, end: str, batch_size: int = 100):
+    def run_pipeline(self, ticker: str, start: str, end: str, batch_size: int = 100, collection: str = MONGODB_COLLECTION_OHLC):
         parser = YahooOhlcParser(ticker)
         fetcher = YahooOhlcFetcher(ticker, parser)
-        # kafka =  KafkaClient()
-        # for batch in self.batch_iterator(fetcher.fetch(start, end), batch_size):
-        #     for ohlc in batch:
-        #         kafka.push_db(MONGODB_COLLECTION_OHLC, ohlc.to_dict())
+        mongodb = MongoDbClient()
+        mongodb.delete(collection, {
+            "date": {
+                "$gte": datetime.strptime(start, "%Y-%m-%d").timestamp(),
+                "$lte": datetime.strptime(end, "%Y-%m-%d").timestamp()
+            }
+        })
+
         for batch in self.batch_iterator(fetcher.fetch(start, end), batch_size):
             self.client.insert_many(MONGODB_COLLECTION_OHLC, [x.to_dict() for x in batch])
-
-    def run_simulation_pipeline(self, ticker: str, start: str, end: str, batch_size: int = 100):
-        parser = YahooOhlcParser(ticker)
-        fetcher = YahooOhlcFetcher(ticker, parser)
-
-        for batch in self.batch_iterator(fetcher.fetch(start, end), batch_size):
-            for ohlc in batch:
-                self.upsert_simulation_data(
-                    simulation_date=ohlc.date,
-                    data_type=MONGODB_COLLECTION_OHLC,
-                    new_data=ohlc.to_dict()
-                )
 
 
 if __name__ == "__main__":
@@ -40,19 +33,19 @@ if __name__ == "__main__":
 
     # test for historical pipeline
 
-    pipeline.run_historical_pipeline(
-        ticker="AAPL",
-        start="2024-01-01",
-        end="2024-10-31",
-        batch_size=1
+    pipeline.run_pipeline(
+        ticker="^GSPC",
+        start="2000-01-01",
+        end="2009-12-31",
+        batch_size=100
     )
     time.sleep(10)
-    client = MongoDbClient()
-    # deleted_many = client.delete("ohlc", {"ticker": "AAPL"})
-    docs = list(client.find("ohlc"))
-    print("[INFO] Total documents in ohlc:", len(docs))
-    for doc in docs:
-        print(doc)
+    # client = MongoDbClient()
+    # # deleted_many = client.delete("ohlc", {"ticker": "AAPL"})
+    # docs = list(client.find("ohlc"))
+    # print("[INFO] Total documents in ohlc:", len(docs))
+    # for doc in docs:
+    #     print(doc)
 
     # test for simulation pipeline
     # pipeline.run_simulation_pipeline(

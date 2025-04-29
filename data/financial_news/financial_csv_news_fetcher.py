@@ -6,41 +6,51 @@ from common.model.financial_news import FinancialNews
 
 
 class FinancialCsvNewsFetcher(DataFetcher):
-    def __init__(self, parser: DataParser, csv_path: str, ticker: str = None):
+    def __init__(self, parser: DataParser, csv_path: str,
+                 ticker: str | None = None,
+                 chunksize: int = 500_000):
         self.parser = parser
         self.csv_path = csv_path
         self.ticker = ticker
+        self.chunksize = chunksize
 
     def fetch(self, start: str, end: str) -> Iterator[FinancialNews]:
-        # read CSV file with proper quoting
-        df = pd.read_csv(
-            self.csv_path,
-            quoting=1,  # QUOTE_ALL
-            escapechar='\\',
-            encoding='utf-8'
-        )
-        
-        # convert datetime string to timestamp
-        df['datetime'] = pd.to_datetime(df['datetime']).astype('int64') // 10**9
-        
-        # convert start and end to timestamps
         start_ts = int(pd.to_datetime(start).timestamp())
-        end_ts = int(pd.to_datetime(end).timestamp())
-        
-        # filter time range
-        mask = (df['datetime'] >= start_ts) & (df['datetime'] <= end_ts)
-        df = df[mask]
-        
-        # if ticker is specified, filter specific stock
-        if self.ticker:
-            df = df[df['ticker'] == self.ticker]
-        
-        if df.empty:
-            return
+        end_ts   = int(pd.to_datetime(end).timestamp())
 
-        # iterate data and parse
-        for _, row in df.iterrows():
-            news_dict = row.to_dict()
-            news = self.parser.parse(news_dict)
-            if news:
-                yield news
+        colnames = ["id", "ticker", "news_id",
+                    "datetime", "headline", "summary"]
+        for chunk in pd.read_csv(
+                self.csv_path,
+                header=None,
+                names=colnames,
+                chunksize=self.chunksize,
+                quoting=1, escapechar="\\",
+                encoding="utf-8",
+                memory_map=True
+        ):
+            if "datetime" in chunk.columns:
+                s = chunk["datetime"]
+            elif "date" in chunk.columns:
+                s = chunk["date"]
+            elif "timestamp" in chunk.columns:
+                s = chunk["timestamp"]
+            else:
+                raise ValueError(
+                    "CSV date error"
+                )
+
+            chunk["datetime"] = pd.to_datetime(s).astype("int64") // 10**9
+
+            mask = chunk["datetime"].between(start_ts, end_ts)
+            if self.ticker:
+                mask &= chunk["ticker"] == self.ticker
+            sub = chunk[mask]
+
+            if sub.empty:
+                continue
+
+            for _, row in sub.iterrows():
+                news = self.parser.parse(row.to_dict())
+                if news:
+                    yield news

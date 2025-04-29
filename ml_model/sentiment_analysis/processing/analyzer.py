@@ -1,4 +1,5 @@
 import torch
+from collections import defaultdict
 from ml_model.sentiment_analysis.model_manager import ModelManager
 # from ml_model.sentiment_analysis.processing.chunker import chunk_text
 # from ml_model.sentiment_analysis.processing.surprisal import calc_surprisal, calc_surprisal_batch
@@ -61,48 +62,78 @@ from ml_model.sentiment_analysis.model_manager import ModelManager
 #         "chunks": len(chunks),
 #     }
 
+def split_text_chunks(texts: list[str], max_len: int = 512, overlap: int = 50) -> list[tuple[int, str]]:
+    tokenizer = ModelManager.get_tokenizer("sentiment")
+    chunk_data = []
+    for idx, text in enumerate(texts):
+        tokens = tokenizer.encode(text)
+        start = 0
+        while start < len(tokens):
+            end = min(start + max_len, len(tokens))
+            chunk_text = tokenizer.decode(tokens[start:end], skip_special_tokens=True)
+            chunk_data.append((idx, chunk_text))
+            if end == len(tokens):
+                break
+            start += max_len - overlap
+    return chunk_data
+
+def process_texts_smart_batch(texts: list[str], batch_size: int = 16) -> list[dict]:
+    chunk_data = split_text_chunks(texts)
+    results_by_idx = defaultdict(list)
+
+    # 统一批处理所有 chunks
+    all_chunks = [chunk for _, chunk in chunk_data]
+    chunk_indices = [idx for idx, _ in chunk_data]
+
+    chunk_results = process_text_batch(all_chunks, batch_size)
+
+    # 按原文本索引进行聚合
+    for idx, chunk_result in zip(chunk_indices, chunk_results):
+        results_by_idx[idx].append(chunk_result)
+
+    # 聚合结果
+    final_results = []
+    for idx in range(len(texts)):
+        chunks = results_by_idx[idx]
+        sentiment = sum(r["sentiment"] for r in chunks) / len(chunks)
+        realness = sum(r["realness"] for r in chunks) / len(chunks)
+        information = sum(r["information"] for r in chunks) / len(chunks)
+
+        final_results.append({
+            "text": texts[idx],
+            "sentiment": sentiment,
+            "realness": realness,
+            "information": information,
+            "overall_score": sentiment,
+        })
+
+    return final_results
+
+
 def process_text_batch(texts: list[str], batch_size: int = 32) -> list[dict]:
     results: list[dict] = []
     for start in range(0, len(texts), batch_size):
-        batch_texts = texts[start:start + batch_size]
+        batch = texts[start:start + batch_size]
+        # 一次性获取 logits 并计算 softmax
+        sent_probs = torch.softmax(
+            ModelManager.get_sentiment_logits(batch), dim=-1
+        ).cpu().numpy()
+        fake_probs = torch.softmax(
+            ModelManager.get_fake_news_logits(batch), dim=-1
+        ).cpu().numpy()
+        infos = ModelManager.calc_surprisal_batch(batch)
 
-        sent_logits = ModelManager.get_sentiment_logits(batch_texts)
-        fake_logits = ModelManager.get_fake_news_logits(batch_texts)
-
-        sent_probs = torch.softmax(sent_logits, dim=-1).cpu().numpy()
-        fake_probs = torch.softmax(fake_logits, dim=-1).cpu().numpy()
-
-        infos = ModelManager.calc_surprisal_batch(batch_texts)
-
-        sent_pipe = ModelManager.get_model("sentiment")
-        id2label = sent_pipe.model.config.id2label
-        label2id = {label: idx for idx, label in id2label.items()}
-        neg_idx = label2id.get("Negative", 0)
-        neu_idx = label2id.get("Neutral", 1)
-        pos_idx = label2id.get("Positive", 2)
-
-        for idx, text in enumerate(batch_texts):
-            p_neg = sent_probs[idx, neg_idx]
-            p_neu = sent_probs[idx, neu_idx]
-            p_pos = sent_probs[idx, pos_idx]
-
-            if p_neu >= max(p_pos, p_neg):
-                sent_score = 0.0
-            else:
-                sent_score = p_pos - p_neg
-
-            real_score = fake_probs[idx, 1]
-            info = infos[idx]
-
-            max_idx = int(sent_probs[idx].argmax())
-            label = id2label[max_idx]
+        for idx, text in enumerate(batch):
+            neg, neu, pos = sent_probs[idx]
+            # 如果中性概率最高，则得分 0，否则用正负之差
+            sent_score = 0.0 if neu >= max(pos, neg) else (pos - neg)
+            real_score = fake_probs[idx][1]
 
             results.append({
                 "text":            text,
                 "sentiment":       float(sent_score),
                 "realness":        float(real_score),
-                "information":     float(info),
+                "information":     float(infos[idx]),
                 "overall_score":   float(sent_score),
-                "sentiment_label": label
             })
     return results

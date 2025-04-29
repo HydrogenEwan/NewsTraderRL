@@ -75,14 +75,39 @@ class RLActor(nn.Module):
         if self.args.msu_bool:
             mu = res[..., 0]
             sigma = torch.log(1 + torch.exp(res[..., 1]))
+            
+            # Handle NaN values in mu and sigma
+            if torch.isnan(mu).any():
+                if self.logger:
+                    self.logger.warning(f"NaN values detected in mu tensor. Replacing with 0.5")
+                mu = torch.where(torch.isnan(mu), torch.tensor(0.5, device=self.args.device), mu)
+            
+            if torch.isnan(sigma).any():
+                if self.logger:
+                    self.logger.warning(f"NaN values detected in sigma tensor. Replacing with 0.1")
+                sigma = torch.where(torch.isnan(sigma), torch.tensor(0.1, device=self.args.device), sigma)
+            
+            # Ensure sigma is positive and not too small
+            sigma = torch.clamp(sigma, min=0.01)
+            
             if deterministic:
                 rho = torch.clamp(mu, 0.0, 1.0)
                 rho_log_p = None
             else:
-                m = Normal(mu, sigma)
-                sample_rho = m.sample()
-                rho = torch.clamp(sample_rho, 0.0, 1.0)
-                rho_log_p = m.log_prob(sample_rho)
+                try:
+                    m = Normal(mu, sigma)
+                    sample_rho = m.sample()
+                    rho = torch.clamp(sample_rho, 0.0, 1.0)
+                    rho_log_p = m.log_prob(sample_rho)
+                except Exception as e:
+                    if self.logger:
+                        self.logger.error(f"Error in Normal distribution: {str(e)}")
+                        self.logger.error(f"mu shape: {mu.shape}, sigma shape: {sigma.shape}")
+                        self.logger.error(f"mu min: {mu.min()}, mu max: {mu.max()}, mu mean: {mu.mean()}")
+                        self.logger.error(f"sigma min: {sigma.min()}, sigma max: {sigma.max()}, sigma mean: {sigma.mean()}")
+                    # Fallback to deterministic behavior
+                    rho = torch.clamp(mu, 0.0, 1.0)
+                    rho_log_p = None
         else:
             rho = torch.ones((batch_size), device=self.args.device) * 0.5
             rho_log_p = None

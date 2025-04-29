@@ -10,7 +10,7 @@
     "max_steps": 12,
     "gamma": 0.05,
     "tau": 0.001,
-    "batch_size": 60,
+    "batch_size": 320,
     "use_gpu": true,
     "addaptiveadj":true,
     "trade_mode": "M",
@@ -18,8 +18,8 @@
     "theta": 0.15,
     "sigma": 0.5,
     "in_features": [
-        5,
-        4
+        7,
+        5
     ],
     "G": 4,
     "mode": "train",
@@ -29,7 +29,7 @@
     "momentum": 0.8,
     "norm_type": "standard",
     "epochs": 1500,
-    "market": "DJIA",
+    "market": "SP100",
     "device": "cuda",
     "relation_file": "industry_classification.npy",
     "trade_len": 21,

@@ -1,5 +1,6 @@
 from __future__ import annotations
 import unittest
+import datetime
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional, Union
 
@@ -51,6 +52,38 @@ class PortfolioResult(DailyBasisModel):
             "traceback": self.traceback
         }
 
+    def round_and_adjust(self) -> List[float]:
+        weights = self.portfolio_weights
+        abs_sum = sum(abs(w) for w in weights)
+
+        if abs_sum == 0:
+            raise ValueError("Sum of absolute portfolio weights cannot be zero.")
+
+        scaled = [w / abs_sum for w in weights]
+        rounded = [round(w, 4) for w in scaled]
+        abs_total = round(sum(abs(w) for w in rounded), 4)
+        diff = round(1.0000 - abs_total, 4)
+
+        if diff != 0:
+            idx = max(range(len(rounded)), key=lambda i: abs(rounded[i]))
+            correction = diff if rounded[idx] >= 0 else -diff
+            rounded[idx] = round(rounded[idx] + correction, 4)
+
+        return rounded
+
+    def get_weight_by_ticker(self, ticker: str) -> Optional[float]:
+        try:
+            idx = self.tickers.index(ticker)
+            return self.round_and_adjust()[idx]
+        except ValueError:
+            return None
+
+    def get_return_by_ticker(self, ticker: str) -> Optional[float]:
+        try:
+            idx = self.tickers.index(ticker)
+            return round(self.returns[idx], 6)
+        except ValueError:
+            return None
 
 class PortfolioResults:
     def __init__(self):
