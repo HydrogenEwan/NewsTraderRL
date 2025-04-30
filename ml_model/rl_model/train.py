@@ -267,7 +267,7 @@ def run(func_args):
     for key, value in func_args.__dict__.items():
         logger.info(f"  {key}: {value}")
 
-    data_prefix = 'ml_model/model1/data/' + func_args.market + '/'
+    data_prefix = 'ml_model/rl_model/data/' + func_args.market + '/'
     matrix_path = data_prefix + func_args.relation_file
 
     start_time = datetime.now().strftime('%m%d_%H_%M_%S')
@@ -287,7 +287,9 @@ def run(func_args):
 
         hyper = copy.deepcopy(func_args.__dict__)
         print(hyper)
-        hyper['device'] = 'cuda' if hyper['device'] == torch.device('cuda') else 'cpu'
+        # Set device based on CUDA availability
+        hyper['device'] = 'cuda' if torch.cuda.is_available() else 'cpu'
+        logger.info(f"Using device: {hyper['device']}")
         json_str = json.dumps(hyper, indent=4)
 
         with open(os.path.join(save_dir, 'hyper.json'), 'w') as json_file:
@@ -318,6 +320,16 @@ def run(func_args):
             stocks_data, market_history = fetch_data_from_mongodb(TARGET_TICKERS)
             logger.info(f"Data fetch complete. Stocks data shape: {stocks_data.shape}, Market history shape: {market_history.shape}")
             
+            # Debug: Print first few dates from stock data
+            logger.info("First few dates from stock data:")
+            for i in range(min(5, stocks_data.shape[1])):
+                logger.info(f"Date {i}: Close prices: {stocks_data[0, i, 0]}")  # First stock's close price
+            
+            # Debug: Print first few dates from market data
+            logger.info("\nFirst few dates from market data:")
+            for i in range(min(5, market_history.shape[0])):
+                logger.info(f"Date {i}: Close price: {market_history[i, 0]}")  # Market close price
+            
             # Update num_assets in func_args to match the actual number of tickers
             func_args.num_assets = stocks_data.shape[0]
             logger.info(f"Updated num_assets to {func_args.num_assets} based on data shape")
@@ -325,16 +337,18 @@ def run(func_args):
             # Load and adjust the adjacency matrix if needed
             try:
                 logger.info(f"Loading adjacency matrix from {matrix_path}")
-                A = torch.from_numpy(np.load(matrix_path)).float().to(func_args.device)
+                A = torch.from_numpy(np.load(matrix_path)).float()
+                # Move to device after loading
+                A = A.to(hyper['device'])
                 # Check if the adjacency matrix dimensions match the number of tickers
                 if A.shape[0] != func_args.num_assets or A.shape[1] != func_args.num_assets:
                     logger.warning(f"Adjacency matrix dimensions ({A.shape[0]}, {A.shape[1]}) don't match number of tickers ({func_args.num_assets})")
                     # Create a new identity matrix with the correct dimensions
-                    A = torch.eye(func_args.num_assets, device=func_args.device)
+                    A = torch.eye(func_args.num_assets, device=hyper['device'])
                     logger.info(f"Created new identity adjacency matrix with shape {A.shape}")
             except Exception as e:
                 logger.warning(f"Error loading adjacency matrix: {e}. Creating identity matrix instead.")
-                A = torch.eye(func_args.num_assets, device=func_args.device)
+                A = torch.eye(func_args.num_assets, device=hyper['device'])
             
             # Calculate test index dynamically based on data size and test ratio
             total_days = stocks_data.shape[1]
@@ -355,9 +369,7 @@ def run(func_args):
             print_memory_usage("After loading data")
 
             logger.info("CUDA available: %s", torch.cuda.is_available())
-            logger.info("Current device: %s", torch.cuda.current_device())
-            logger.info("Device count: %s", torch.cuda.device_count())
-            logger.info("Device name: %s", torch.cuda.get_device_name(0))
+            logger.info("Current device: %s", hyper['device'])
             
             allow_short = True
 
@@ -370,7 +382,7 @@ def run(func_args):
 
             logger.info("Creating RL actor and agent...")
             supports = [A]
-            actor = RLActor(supports, func_args).to(func_args.device)
+            actor = RLActor(supports, func_args).to(hyper['device'])
             agent = RLAgent(env, actor, func_args)
 
             mini_batch_num = int(np.ceil(len(env.src.order_set) / func_args.batch_size))
@@ -463,7 +475,7 @@ if __name__ == '__main__':
             options = json.load(f)
             args = ConfigParser(options)
     else:
-        with open('ml_model/model1/hyper.json') as f:
+        with open('ml_model/rl_model/hyper.json') as f:
             options = json.load(f)
             args = ConfigParser(options)
     args.update(opts)
