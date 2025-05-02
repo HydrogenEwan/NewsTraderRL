@@ -1,0 +1,67 @@
+@import "./reset.css";
+@import "./_variables.css";
+/* @import "./_components.css"; */
+
+@font-face {
+  font-family: "Pretendard";
+  font-weight: 700;
+  font-display: swap;
+  src: local("Pretendard Bold"),
+    url("../woff2-subset/Pretendard-Bold.subset.woff2");
+}
+
+@font-face {
+  font-family: "Pretendard";
+  font-weight: 600;
+  font-display: swap;
+  src: local("Pretendard SemiBold"),
+    url("../woff2-subset/Pretendard-SemiBold.subset.woff2");
+}
+
+@font-face {
+  font-family: "Pretendard";
+  font-weight: 500;
+  font-display: swap;
+  src: local("Pretendard Medium"),
+    url("../woff2-subset/Pretendard-Medium.subset.woff2");
+}
+
+@font-face {
+  font-family: "Pretendard";
+  font-weight: 400;
+  font-display: swap;
+  src: local("Pretendard Regular"),
+    url("../woff2-subset/Pretendard-Regular.subset.woff2");
+}
+
+* {
+  box-sizing: border-box;
+}
+
+:root {
+  line-height: 1.5;
+  font-size: 14px;
+  font-weight: 400;
+
+  font-family: Pretendard, -apple-system, BlinkMacSystemFont, system-ui, Roboto;
+  color-scheme: light dark;
+  color: var(--main-text-color);
+  background-color: var(--gray-900);
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1 {
+  font-size: 28px;
+  line-height: 44px;
+  font-weight: bold;
+}
+
+button {
+  cursor: pointer;
+  border: 0;
+  background-color: transparent;
+}

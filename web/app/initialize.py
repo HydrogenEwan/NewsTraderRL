@@ -1,5 +1,5 @@
 from flask import Flask, jsonify
-
+from flask_cors import CORS
 from web.app.portfolio.routes import portfolio_bp
 from web.app.ticker_detail.routes import ticker_detail_bp
 from web.app.web_context import WebResponseException
@@ -7,6 +7,7 @@ from web.app.web_context import WebResponseException
 
 def create_app():
     app = Flask(__name__)
+    CORS(app)
     app.config.from_object('web.app.config.Config')
 
     @app.errorhandler(WebResponseException)

@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from typing import Any, List, Optional
 
 from common.model.financial_news import FinancialNews
+from common.model.sentiment_result import SentimentResult
 
 
 @dataclass
@@ -145,7 +146,7 @@ class TickerDetailResponse:
     ticker: str
     weight: float
     returns: float
-    sentiment: float
+    sentiment: SentimentResult
     chart: List[TickerWeight]
     news: List[FinancialNews]
     company_profile: CompanyProfile
@@ -155,7 +156,7 @@ class TickerDetailResponse:
             "ticker": self.ticker,
             "weight": self.weight,
             "returns": self.returns,
-            "sentiment": self.sentiment,
+            "sentiment": self.sentiment.to_dict(),
             "chart": [w.to_dict() for w in self.chart],
             "news": [n.to_dict() for n in self.news],
             "company_profile": self.company_profile.to_dict()

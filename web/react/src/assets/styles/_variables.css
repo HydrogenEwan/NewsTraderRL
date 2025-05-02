@@ -1,0 +1,56 @@
+:root {
+  /* color */
+  --main-background-color: #141a1e;
+  --main-text-color: #ffffff;
+
+  --gray-25:#FCFCFD;
+  --gray-50:#F9FAFB;
+
+  --gray-700: #344054;
+  --gray-800: #1D2939;
+  --gray-900: #101828;
+
+  /* 
+  --secondary-text-color: #afbfca;
+
+  --ask-40: #891415;
+  --bid-40: #055128;
+
+  --divider-color-20: #2a363e;
+  --divider-color-60: #445460;
+
+  --neutral-control-color-20: #232a2e;
+  --neutral-control-layer-color-50: #95a4ad;
+  --neutral-control-layer-color-60: #afbfca;
+  --neutral-control-layer-color-70: #cad5dc;
+
+  --primary-cta-color-10: #181c4a;
+  --primary-cta-color-90: #8980ff; */
+
+  
+
+  /* --divider-color-10: #f0f1f3;
+  --divider-color-20: #d1d5db;
+
+  --navbar-background-color: #ffffff;
+  --navbar-control-bg-color-10: #ededfc;
+  --navbar-control-layer-color-60: #281bca;
+
+  --neutral-control-color-00: #ffffff;
+  
+  --neutral-control-color-70: #dbdde5;
+  --neutral-control-color-90: #c7cad6;
+  
+  --neutral-control-layer-color-70: #454e68;
+  --neutral-control-layer-color-80: #303648;
+  --neutral-control-layer-color-90: #1c1f27;
+
+  --primary-cta-color-60: #4c40e6;
+  --primary-cta-color-80: #281bca;
+  --primary-cta-layer-color-60: #ffffff; */
+
+  /* font */
+  --font-medium: 500;
+  --font-semi-bold: 600;
+  --font-bold: 700;
+}

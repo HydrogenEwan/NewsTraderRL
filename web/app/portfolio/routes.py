@@ -9,7 +9,7 @@ from web.app.dto.web_response import WebResponse
 portfolio_bp = Blueprint('portfolio', __name__)
 
 
-@portfolio_bp.route('/', methods=['GET'])
+@portfolio_bp.route('/', methods=['GET'], strict_slashes=False)
 def index():
     with web_response_context():
         date_str = request.args.get('date')
