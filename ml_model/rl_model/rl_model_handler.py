@@ -26,6 +26,7 @@ class RLModelHandler:
         # Set device based on CUDA availability
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         print(f"Using device: {self.device}")
+        logger = logging.getLogger()
         
         # Load configuration
         if config_path is None:
@@ -34,10 +35,25 @@ class RLModelHandler:
         with open(config_path) as f:
             options = json.load(f)
             self.args = ConfigParser(options)
-        
+        self.args.num_assets = 102
+                   
         # Load model
-        self.model = torch.load(model_path, map_location=self.device)
+        matrix_path = os.path.join('ml_model/rl_model/data', self.args.market, self.args.relation_file)
+        try:
+            logger.info(f"Loading adjacency matrix from {matrix_path}")
+            A = torch.from_numpy(np.load(matrix_path)).float().to(self.device)
+        except Exception as e:
+            logger.error(f"Error loading adjacency matrix: {str(e)}")
+            raise
+        supports = [A]
+        self.model = RLActor(supports, self.args).to(self.device)
+        self.model = torch.load(self.model_path, map_location=self.device, weights_only=False)
         self.model.to(self.device)  # Ensure model is on the correct device
+        
+        for name, param in self.model.named_parameters():
+            print(f"{name}: {param.shape}, mean={param.data.mean():.4f}, std={param.data.std():.4f}")
+
+        print(f"Model loaded from {self.model_path}")
         self.model.eval()  # Set to evaluation mode
         
         # Initialize environment and agent (will be created when data is available)
