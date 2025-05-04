@@ -211,3 +211,7 @@ logs/
 logs/*
 outputs/
 outputs/*
+
+# Node modules
+node_modules/
+node_modules/*

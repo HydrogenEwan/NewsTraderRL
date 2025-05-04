@@ -1,11 +1,12 @@
 import requests
 from pymongo import DESCENDING
-
-from common.config.db_config import MONGODB_COLLECTION_PORTFOLIO, MONGODB_COLLECTION_NEWS
+import datetime
+from common.config.db_config import MONGODB_COLLECTION_PORTFOLIO, MONGODB_COLLECTION_NEWS, MONGODB_COLLECTION_SENTIMENT
 from common.config.financial_news_config import FINNHUB_API_KEY
 from common.infrastructure.mongodb.mongodb_client import MongoDbClient
 from common.model.financial_news import FinancialNews
 from common.model.portfolio_result import PortfolioResult
+from common.model.sentiment_result import SentimentResult
 from web.app.dto.ticker_detail_response import TickerDetailResponse, TickerWeight, CompanyProfile
 
 
@@ -13,6 +14,9 @@ def get_ticker_detail(ticker: str) -> TickerDetailResponse:
     mongodb = MongoDbClient.get_instance()
 
     lastdate = mongodb.get_latest_date(MONGODB_COLLECTION_PORTFOLIO)
+    if lastdate is None:
+        raise ValueError("No portfolio data found.")
+
     portfolio_doc = mongodb.find_one(MONGODB_COLLECTION_PORTFOLIO, {"date": lastdate})
     portfolio = PortfolioResult.from_raw(portfolio_doc)
 
@@ -24,6 +28,18 @@ def get_ticker_detail(ticker: str) -> TickerDetailResponse:
             date=item.date.strftime("%Y-%m-%d"),
             weight=item.get_weight_by_ticker(ticker)
         ))
+
+    sentiment_doc = mongodb.find_one(MONGODB_COLLECTION_SENTIMENT, {"ticker": ticker, "date": lastdate})
+    # print(lastdate)
+    if sentiment_doc:
+        sentiment = SentimentResult.from_raw(sentiment_doc)
+    else:
+        sentiment = SentimentResult(
+            ticker=ticker,
+            avg_score=0.0,
+            label="Neutral",
+            date=datetime.date.fromisoformat(lastdate)
+        )
 
     news = []
     news_docs = list(mongodb.find(MONGODB_COLLECTION_NEWS, {"ticker": ticker}, sort=[("datetime", DESCENDING)], limit=10))
@@ -39,7 +55,7 @@ def get_ticker_detail(ticker: str) -> TickerDetailResponse:
         ticker=ticker,
         weight=portfolio.get_weight_by_ticker(ticker),
         returns=portfolio.get_return_by_ticker(ticker),
-        sentiment=0.5,
+        sentiment=sentiment,
         chart=chart,
         news = news,
         company_profile=company_profile

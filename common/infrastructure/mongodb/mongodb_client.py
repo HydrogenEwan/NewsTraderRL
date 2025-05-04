@@ -2,6 +2,7 @@ from __future__ import annotations
 from pymongo import MongoClient
 from pymongo.collection import Collection
 from typing import Union, List, Dict, Optional, Any
+from datetime import datetime
 from common.config import db_config
 
 
@@ -101,7 +102,10 @@ class MongoDbClient:
                 projection={"date": 1, "_id": 0}
             )
             latest = next(result, None)
-            return latest.get("date") if latest else None
+            if latest is None:
+                return None
+
+            return latest.get("date")
         except Exception as e:
             print(f"[MongoDbClient] get_latest_date failed: {e}")
             return None
