@@ -15,7 +15,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class MatrixMaker:
-    def __init__(self, market='SP500', start_date=None, end_date=None):
+    def __init__(self, market='SP100', start_date=None, end_date=None):
         """
         Initialize the data collector.
         
@@ -33,7 +33,7 @@ class MatrixMaker:
         os.makedirs(self.data_dir, exist_ok=True)
         
         # Use TARGET_TICKERS from common/config/target_tickers.py
-        self.components = TARGET_TICKERS
+        self.components = TARGET_TICKERS[:10]
         logger.info(f"Using {len(self.components)} tickers from common/config/target_tickers.py")
         
         # Market-specific configurations
@@ -174,7 +174,7 @@ class MatrixMaker:
                 industry_matrix[i, j] = weight
         
         # Save to file
-        np.save(os.path.join(self.data_dir, 'industry_classification.npy'), industry_matrix)
+        np.save(os.path.join(self.data_dir, 'industry_classification_test.npy'), industry_matrix)
         logger.info(f"Industry classification matrix saved with shape {industry_matrix.shape}")
         
         return industry_matrix

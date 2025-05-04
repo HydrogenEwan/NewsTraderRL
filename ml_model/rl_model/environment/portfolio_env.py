@@ -1,22 +1,8 @@
 import math
 from collections import namedtuple
-import logging
 
 import numpy as np
 import pandas as pd
-
-# Set up logger
-logger = logging.getLogger(__name__)
-# If the logger doesn't have handlers, add a default handler
-if not logger.handlers:
-    logger.setLevel(logging.INFO)
-    BASIC_FORMAT = "%(asctime)s:%(levelname)s:%(message)s"
-    DATE_FORMAT = '%Y-%m-%d %H:%M:%S'
-    formatter = logging.Formatter(BASIC_FORMAT, DATE_FORMAT)
-    chlr = logging.StreamHandler()
-    chlr.setFormatter(formatter)
-    chlr.setLevel(logging.WARNING)
-    logger.addHandler(chlr)
 
 Reward = namedtuple('Reward', ('total', 'long', 'short'))
 
@@ -58,6 +44,24 @@ class DataGenerator():
         self.__org_assets_data = assets_data.copy()[:, :, :in_features[0]]
         # ==== input type ====
         self.__assets_data = self.__org_assets_data.copy()
+        price = self.__org_assets_data[:, :, 0]                              # [num_assets, T]
+        price = price.astype(float)
+        price[price == 0] = np.nan
+        for i in range(price.shape[0]):
+            # pandas approach:
+            df = pd.DataFrame(price[i, :])
+            df.fillna(method='ffill', inplace=True)
+            df.fillna(method='bfill', inplace=True)
+            price[i, :] = df.values.flatten()
+        
+
+        self.__org_assets_data[:, :, 0] = price
+        raw_ror = price[:, 1:] / (price[:, :-1] + EPS) - 1.0                 # [num_assets, T-1]
+        # prepend a “zero return” (or NaN, if you’d prefer to mask it out)
+        pad     = np.zeros((price.shape[0], 1), dtype=raw_ror.dtype)        
+        ror     = np.concatenate([pad, raw_ror], axis=1)                     # [num_assets, T]
+        self.__ror_data = ror.astype(np.float32)
+
         if allow_short:
             self.__org_market_data = market_data[:, :in_features[1]]
             self.__market_data = self.__org_market_data.copy()
@@ -73,28 +77,6 @@ class DataGenerator():
         self.__sample_p = self.__sample_p / sum(self.__sample_p)
 
         self.step_cnt = 0
-
-    def _calculate_returns(self, prices):
-        """
-        Calculate returns from price data using vectorized operations.
-        
-        Args:
-            prices: Array of shape (num_stocks, num_days) containing closing prices
-            
-        Returns:
-            Array of shape (num_stocks, num_days) containing returns
-        """
-        # Create shifted prices array (previous day's prices)
-        prices_prev = np.roll(prices, 1, axis=1)
-        prices_prev[:, 0] = prices[:, 0]  # Set first day's previous price same as current
-        
-        # Calculate returns using vectorized operations
-        # Handle division by zero and negative prices
-        mask = (prices > 0) & (prices_prev > 0)
-        returns = np.zeros_like(prices)
-        returns[mask] = (prices[mask] - prices_prev[mask]) / prices_prev[mask]
-        
-        return returns
 
     def _step(self):
 
@@ -186,6 +168,7 @@ class DataGenerator():
         return obs, obs_normed, market_obs, market_obs_normed, future_ror, trade_masks, done
 
     def _get_data(self):
+
         raw_states = np.zeros(
             (len(self.cursor), self.__assets_data.shape[0], (self.window_len + 1) * 5, self.assets_features))
         assets_states = np.zeros((len(self.cursor), self.__assets_data.shape[0], self.window_len, self.assets_features))
@@ -195,106 +178,41 @@ class DataGenerator():
             market_states = None
         future_return = np.zeros((len(self.cursor), self.__assets_data.shape[0], self.trade_len))
         past_return = np.zeros((len(self.cursor), self.__assets_data.shape[0], self.window_len))
-        
         for i, idx in enumerate(self.cursor):
-            raw_states[i] = self.__assets_data[:, idx - (self.window_len + 1) * 5 + 1:idx + 1, :].copy()
-            #tmp_states[:, :, :, :, F] = 0. Close, 1. High, 2. Low, 3. Volume, 4. Market Cap
+            raw_states[i] = self.__assets_data[:, idx - (self.window_len + 1) * 5 + 1:idx + 1].copy()
             tmp_states = raw_states.reshape(raw_states.shape[0], raw_states.shape[1], self.window_len + 1, 5, -1)
-            
-            # Handle division by zero and NaN values
-            denominator = tmp_states[i, :, :-1, -1, 0]
-            # Replace zeros with a small epsilon to prevent division by zero
-            denominator = np.where(denominator == 0, 1e-10, denominator)
-            assets_states[i, :, :, 0] = tmp_states[i, :, 1:, -1, 0] / denominator
-            
-            # For high and low values, handle potential division by zero
-            close_prices = tmp_states[i, :, 1:, -1, 0]
-            close_prices = np.where(close_prices == 0, 1e-10, close_prices)
-            
-            # Calculate high and low ratios with safety checks
-            high_values = np.nanmax(tmp_states[i, :, 1:, :, 1], axis=-1)
-            low_values = np.nanmin(tmp_states[i, :, 1:, :, 2], axis=-1)
-            
-            assets_states[i, :, :, 1] = high_values / close_prices
-            assets_states[i, :, :, 2] = low_values / close_prices
-            
-            # Handle volume and market cap
+            assets_states[i, :, :, 0] = tmp_states[i, :, 1:, -1, 0] / tmp_states[i, :, :-1, -1, 0]
+            assets_states[i, :, :, 1] = np.nanmax(tmp_states[i, :, 1:, :, 1], axis=-1) / tmp_states[i, :, 1:, -1, 0]
+            assets_states[i, :, :, 2] = np.nanmin(tmp_states[i, :, 1:, :, 2], axis=-1) / tmp_states[i, :, 1:, -1, 0]
             assets_states[i, :, :, 3] = np.nansum(tmp_states[i, :, 1:, :, 3], axis=-1)
             assets_states[i, :, :, 4] = np.nanmean(tmp_states[i, :, 1:, :, 4], axis=-1)
-            assets_states[i, :, :, 5] = np.nanmean(tmp_states[i, :, 1:, :, 5], axis=-1)
-            assets_states[i, :, :, 6] = np.nanmean(tmp_states[i, :, 1:, :, 6], axis=-1)
-                
+            # FIXME
+            if tmp_states.shape[-1] == 7:
+                assets_states[i, :, :, 5] = np.nansum(tmp_states[i, :, 1:, :, 5], axis=-1)
+                assets_states[i, :, :, 6] = np.nanmean(tmp_states[i, :, 1:, :, 6], axis=-1)
             if self.allow_short:
-                #Average any features per week of the original market data
                 tmp_states = self.__market_data[idx - (self.window_len) * 5 + 1:idx + 1].reshape(self.window_len, 5, -1)
                 market_states[i] = np.mean(tmp_states, axis=1)
+            future_return[i] = self.__ror_data[:, idx + 1:min(idx + 1 + self.trade_len, self.__ror_data.shape[-1])]
+            past_return[i] = self.__ror_data[:, idx - self.window_len + 1:idx + 1]
             
-            # Calculate returns on-the-fly
-            prices = self.__assets_data[:, :, 0]  # Get closing prices
-            returns = self._calculate_returns(prices)
-            
-            # Handle future and past returns with bounds checking
-            if idx + 1 < returns.shape[1]:
-                future_return[i] = returns[:, idx + 1:min(idx + 1 + self.trade_len, returns.shape[1])]
-            else:
-                # If we're at the end of the data, pad with zeros
-                future_return[i] = np.zeros((returns.shape[0], self.trade_len))
-                
-            if idx - self.window_len + 1 >= 0:
-                past_return[i] = returns[:, idx - self.window_len + 1:idx + 1]
-            else:
-                # If we're at the beginning of the data, pad with zeros
-                past_return[i] = np.zeros((returns.shape[0], self.window_len))
-
-        # Replace any remaining NaN values with zeros
         assets_states = np.nan_to_num(assets_states, nan=0.0, posinf=0.0, neginf=0.0)
-        if self.allow_short and market_states is not None:
-            market_states = np.nan_to_num(market_states, nan=0.0, posinf=0.0, neginf=0.0)
-        future_return = np.nan_to_num(future_return, nan=0.0, posinf=0.0, neginf=0.0)
-        past_return = np.nan_to_num(past_return, nan=0.0, posinf=0.0, neginf=0.0)
-
         return assets_states, market_states, future_return, past_return
 
     def _fillna(self, obs, masks):
         """
-        Fill NaN values in the observation data.
-        
-        Args:
-            obs: Observation data with shape (batch, num_assets, window_len, features)
-            masks: Boolean masks indicating which values to fill
-            
-        Returns:
-            Filled observation data with no NaN values
+        :param obs: (batch, num_assets, window_len, features)
+        :param masks: bool
+        :return:
         """
-        # Set masked values to 0
         obs[masks] = 0.
-        
-        # Find assets with NaN values
+
         in_nan_assets = np.argwhere(np.isnan(np.sum(obs.reshape(obs.shape[0], obs.shape[1], -1), axis=-1)))
-        
-        # Process each asset with NaN values
         for idx in in_nan_assets:
-            # Convert to DataFrame for easier handling
             tmp_df = pd.DataFrame(obs[idx[0], idx[1]])
-            
-            # First try backward fill
-            tmp_df = tmp_df.bfill()
-            
-            # Then try forward fill for any remaining NaNs
-            tmp_df = tmp_df.ffill()
-            
-            # If there are still NaNs, fill with 0
-            tmp_df = tmp_df.fillna(0)
-            
-            # Update the observation data
+            tmp_df = tmp_df.fillna(method='bfill')
             obs[idx[0], idx[1]] = tmp_df.values
-        
-        # Double-check for any remaining NaNs and fill with 0
-        if np.isnan(obs).any():
-            logger.warning("Some NaN values were not filled by the standard methods. Filling with 0.")
-            obs = np.nan_to_num(obs, nan=0.0)
-        
-        # Final assertion to ensure no NaNs remain
+
         assert not np.isnan(obs).any(), 'still have nan not been filled'
         return obs
 
@@ -313,13 +231,13 @@ class DataGenerator():
             x_mean = np.mean(inputs, axis=-2, keepdims=True)
             x_std = np.std(inputs, axis=-2, keepdims=True)
             normed = (inputs - x_mean) / (x_std + EPS)
-        elif self.norm_type == 'min-max':
-            x_max = np.max(inputs, axis=-2, keepdims=True)
-            x_min = np.min(inputs, axis=-2, keepdims=True)
-            normed = (inputs - x_min) / (x_max - x_min + EPS)
-        elif self.norm_type == 'div-last':
-            inputs[np.logical_not(masks)] = inputs[np.logical_not(masks)] / inputs[np.logical_not(masks)][:, -1:, :]
-            normed = inputs
+        # elif self.norm_type == 'min-max':
+        #     x_max = np.max(inputs, axis=-2, keepdims=True)
+        #     x_min = np.min(inputs, axis=-2, keepdims=True)
+        #     normed = (inputs - x_min) / (x_max - x_min + EPS)
+        # elif self.norm_type == 'div-last':
+        #     inputs[np.logical_not(masks)] = inputs[np.logical_not(masks)] / inputs[np.logical_not(masks)][:, -1:, :]
+        #     normed = inputs
         else:
             raise NotImplementedError
 
@@ -517,10 +435,7 @@ class PortfolioEnv(object):
         self.sim = PortfolioSim(num_assets=self.num_assets, fee=fee, time_cost=time_cost, allow_short=allow_short)
 
     def step(self, action, p, simulation=False):
-        # Ensure weights and p are numpy arrays
-        weights = np.asarray(action, dtype=np.float32)
-        p = np.asarray(p, dtype=np.float32)
-        
+        weights = action
         if simulation:
             raise NotImplementedError
         else:

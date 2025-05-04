@@ -10,7 +10,7 @@
     "max_steps": 12,
     "gamma": 0.05,
     "tau": 0.001,
-    "batch_size": 320,
+    "batch_size": 50,
     "use_gpu": true,
     "addaptiveadj":true,
     "trade_mode": "M",
@@ -21,7 +21,7 @@
         7,
         5
     ],
-    "G": 4,
+    "G": 10,
     "mode": "train",
     "num_rounds": 80000,
     "max_grad_norm": 100.0,
@@ -33,6 +33,7 @@
     "device": "cuda",
     "relation_file": "industry_classification.npy",
     "trade_len": 21,
-    "eta": 0.01,
-    "rho": 0.1
+    "msu_bool": false,
+    "seed": -1,
+    "spatial_bool": true
 }

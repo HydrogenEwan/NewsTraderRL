@@ -9,6 +9,7 @@ from tqdm import *
 import numpy as np
 import torch
 from torch.utils.tensorboard import SummaryWriter
+import pandas as pd
 
 from .utils.parse_config import ConfigParser
 from .utils.functions import *
@@ -31,9 +32,10 @@ def fetch_data_from_mongodb(target_tickers, start_date=None, end_date=None):
         end_date: End date in 'YYYY-MM-DD' format
         
     Returns:
-        tuple: (stocks_data, market_history)
+        tuple: (stocks_data, market_history, valid_tickers)
             stocks_data: numpy array of shape (num_stocks, num_days, 7)  # 7 features for stocks
             market_history: numpy array of shape (num_days, 5)  # 5 features for market
+            valid_tickers: list of tickers that have sufficient data
     """
     helper = MlModelHelper()
     logger = logging.getLogger()
@@ -70,8 +72,8 @@ def fetch_data_from_mongodb(target_tickers, start_date=None, end_date=None):
                     'low': doc['low'],
                     'volume': doc['volume'],
                     'marketcap': doc.get('marketcap', 0.0),  # Default to 0.0 if not present
-                    'sentiment': 0.0,  # Default sentiment score
-                    'sec_score': 0.0   # Default SEC score
+                    # 'sentiment': 0.0,  # Default sentiment score
+                    # 'sec_score': 0.0   # Default SEC score
                 })
                 doc_count += 1
             
@@ -371,7 +373,7 @@ def run(func_args):
             logger.info("CUDA available: %s", torch.cuda.is_available())
             logger.info("Current device: %s", hyper['device'])
             
-            allow_short = True
+            allow_short = False
 
             logger.info("Creating portfolio environment...")
             env = PortfolioEnv(assets_data=stocks_data, market_data=market_history,
@@ -407,6 +409,8 @@ def run(func_args):
                     avg_train_return = epoch_return / mini_batch_num
                     logger.warning('[%s]round %d, avg train return %.4f, avg rho %.4f, avg mdd %.4f' %
                                    (start_time, epoch, avg_train_return, avg_rho, avg_mdd))
+                    writer.add_scalar('Train/APR', avg_train_return, global_step=epoch)
+                    writer.add_scalar('Train/MDD', avg_mdd, global_step=epoch)
                     agent_wealth = agent.evaluation()
                     metrics = calculate_metrics(agent_wealth, func_args.trade_mode)
                     writer.add_scalar('Test/APR', metrics['APR'], global_step=epoch)
@@ -418,28 +422,35 @@ def run(func_args):
                     
                     # Update the progress bar with metrics
                     epoch_pbar.set_postfix({
-                        'CR': f"{float(metrics['CR']):.3f}",
-                        'APR': f"{float(metrics['APR'])*100:.2f}%",
-                        'MDD': f"{float(metrics['MDD'])*100:.2f}%"
+                        'CR': f"{float(metrics['CR'].item()):.3f}",
+                        'APR': f"{float(metrics['APR'].item())*100:.2f}%",
+                        'MDD': f"{float(metrics['MDD'].item())*100:.2f}%"
                     })
 
-                    if metrics['CR'] > max_cr:
+                    if metrics['CR'].item() > max_cr:
                         logger.info('New Best CR Policy!!!!')
-                        max_cr = metrics['CR']
+                        max_cr = metrics['CR'].item()
                         torch.save(actor, os.path.join(model_save_dir, 'best_cr-'+str(epoch)+'.pkl'))
 
                     print_memory_usage(f"End of epoch {epoch}") #debugging code for GPU
                     logger.info(f"[run.py] Allocated: {torch.cuda.memory_allocated() / 1024**3:.2f} GB, Reserved: {torch.cuda.memory_reserved() / 1024**3:.2f} GB")
-                    torch.cuda.empty_cache()
                     gc.collect()
                     
                     logger.warning('after training %d round, max wealth: %.4f, min wealth: %.4f,'
                                    ' avg wealth: %.4f, final wealth: %.4f, ARR: %.3f%%, ASR: %.3f, AVol" %.3f,'
                                    'MDD: %.2f%%, CR: %.3f, DDR: %.3f'
                                    % (
-                                       epoch, max(agent_wealth[0]), min(agent_wealth[0]), np.mean(agent_wealth),
-                                       agent_wealth[-1, -1], 100 * metrics['APR'], metrics['ASR'], metrics['AVOL'],
-                                       100 * metrics['MDD'], metrics['CR'], metrics['DDR']
+                                       epoch, 
+                                       float(np.max(agent_wealth[0])), 
+                                       float(np.min(agent_wealth[0])), 
+                                       float(np.mean(agent_wealth)),
+                                       float(agent_wealth[-1, -1]), 
+                                       100 * float(metrics['APR'].item()), 
+                                       float(metrics['ASR'].item()), 
+                                       float(metrics['AVOL'].item()),
+                                       100 * float(metrics['MDD'].item()), 
+                                       float(metrics['CR'].item()), 
+                                       float(metrics['DDR'].item())
                                    ))
             except KeyboardInterrupt:
                 logger.info("Training interrupted by user. Saving model...")
@@ -452,32 +463,16 @@ def run(func_args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('-c', '--config', type=str)
-    parser.add_argument('--window_len', type=int)
-    parser.add_argument('--G', type=int)
-    parser.add_argument('--batch_size', type=int)
-    parser.add_argument('--seed', type=int, default=-1)
-    parser.add_argument('--lr', type=float)
-    parser.add_argument('--gamma', type=float)
-    parser.add_argument('--no_spatial', dest='spatial_bool', action='store_false')
-    parser.add_argument('--no_msu', dest='msu_bool', action='store_false')
-    parser.add_argument('--relation_file', type=str)
-    parser.add_argument('--addaptiveadj', dest='addaptive_adj_bool', action='store_false')
-    parser.add_argument('--spatial_bool', type=bool, default=True)
-    parser.add_argument('--msu_bool', type=bool, default=True)
-    parser.add_argument('--addaptive_adj_bool', type=bool, default=True)
-    parser.add_argument('--rho', type=float, default=0.1)
-
+    parser.add_argument('-c','--config', type=str, help="path to JSON config")
+    # … other add_argument calls …
     opts = parser.parse_args()
 
-    if opts.config is not None:
-        with open(opts.config) as f:
-            options = json.load(f)
-            args = ConfigParser(options)
-    else:
-        with open('ml_model/rl_model/hyper.json') as f:
-            options = json.load(f)
-            args = ConfigParser(options)
+    config_path = opts.config if opts.config is not None else 'ml_model/rl_model/hyper.json'
+
+    with open(config_path) as f:
+        options = json.load(f)
+
+    args = ConfigParser(options)
     args.update(opts)
 
     run(args)

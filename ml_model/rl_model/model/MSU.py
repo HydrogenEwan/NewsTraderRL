@@ -22,37 +22,19 @@ class MSU(nn.Module):
         :X: [batch_size(B), window_len(L), in_features(I)]
         :return: Parameters: [batch, 2]
         """
-        # Check for NaN values in input
-        if torch.isnan(X).any():
-            # Replace NaN values with zeros
-            X = torch.where(torch.isnan(X), torch.zeros_like(X), X)
-        
         X = X.permute(1, 0, 2)
 
-        try:
-            outputs, (h_n, c_n) = self.lstm(X)  # lstm version
-            H_n = h_n.repeat((self.window_len, 1, 1))
-            scores = self.attn2(torch.tanh(self.attn1(torch.cat([outputs, H_n], dim=2))))  # [L, B*N, 1]
-            scores = scores.squeeze(2).transpose(1, 0)  # [B*N, L]
-            attn_weights = torch.softmax(scores, dim=1)
-            outputs = outputs.permute(1, 0, 2)  # [B*N, L, H]
-            attn_embed = torch.bmm(attn_weights.unsqueeze(1), outputs).squeeze(1)
-            embed = torch.relu(self.bn1(self.linear1(attn_embed)))
-            parameters = self.linear2(embed)
-            
-            # Check for NaN values in output
-            if torch.isnan(parameters).any():
-                # Replace NaN values with zeros
-                parameters = torch.where(torch.isnan(parameters), torch.zeros_like(parameters), parameters)
-                
-            # Ensure parameters are within reasonable ranges
-            parameters = torch.clamp(parameters, min=-10.0, max=10.0)
-            
-            return parameters.squeeze(-1)
-        except Exception as e:
-            # If any error occurs, return a safe default value
-            batch_size = X.shape[1]
-            return torch.zeros((batch_size, 2), device=X.device)
+        outputs, (h_n, c_n) = self.lstm(X)  # lstm version
+        H_n = h_n.repeat((self.window_len, 1, 1))
+        scores = self.attn2(torch.tanh(self.attn1(torch.cat([outputs, H_n], dim=2))))  # [L, B*N, 1]
+        scores = scores.squeeze(2).transpose(1, 0)  # [B*N, L]
+        attn_weights = torch.softmax(scores, dim=1)
+        outputs = outputs.permute(1, 0, 2)  # [B*N, L, H]
+        attn_embed = torch.bmm(attn_weights.unsqueeze(1), outputs).squeeze(1)
+        embed = torch.relu(self.bn1(self.linear1(attn_embed)))
+        parameters = self.linear2(embed)
+        # return parameters[:, 0], parameters[:, 1]   # mu, sigma
+        return parameters.squeeze(-1)
 
 
 if __name__ == '__main__':
