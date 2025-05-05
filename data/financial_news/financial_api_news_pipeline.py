@@ -2,6 +2,10 @@ from typing import Iterator, Optional
 import os
 import json
 from datetime import datetime
+
+from common.config.db_config import MONGODB_COLLECTION_NEWS
+from common.config.financial_news_config import FINNHUB_API_KEY
+from common.infrastructure.mongodb.mongodb_client import MongoDbClient
 from data.financial_news.financial_api_news_fetcher import FinancialApiNewsFetcher
 from data.financial_news.financial_api_news_parser import FinancialApiNewsParser
 from common.model.financial_news import FinancialNews
@@ -18,6 +22,8 @@ class FinancialApiNewsPipeline:
         self.api_key = api_key
         self.output_dir = output_dir
         self.parser = FinancialApiNewsParser()
+        self.mongodb = MongoDbClient()
+        self.collection = MONGODB_COLLECTION_NEWS
         
         # ensure output directory exists
         os.makedirs(output_dir, exist_ok=True)
@@ -87,13 +93,40 @@ class FinancialApiNewsPipeline:
             if not news_list:
                 print(f"no news found for {ticker} from {start_time} to {end_time}")
                 return None
-                
+
+            news_dict_list = []
+            for news in news_list:
+                news_dict_list.append(news.to_dict())
+
+            self.save_to_db(news_dict_list, ticker, start_time, end_time)
             # save news data
-            filepath = self.save_news(news_list, ticker, start_time, end_time)
-            print(f"saved {len(news_list)} news to {filepath}")
+            # filepath = self.save_news(news_list, ticker, start_time, end_time)
+            # print(f"saved {len(news_list)} news to {filepath}")
             
-            return filepath
+            # return filepath
+
             
         except Exception as e:
             print(f"failed to process news data: {e}")
             return None
+
+    def save_to_db(self, news_list: list, ticker: str, start_time: str, end_time: str):
+        self.mongodb.delete(self.collection, {
+            "ticker": ticker,
+            "date": {
+                "$gte": start_time,
+                "$lte": end_time
+            }
+        })
+
+        self.mongodb.insert_many(self.collection, news_list)
+        # print(f"News saved {len(news_list)} news to db for {ticker}")
+
+    def run_tickers(self, ticker_list: list, start_time: str, end_time: str):
+        for t in ticker_list:
+            self.run(t, start_time, end_time)
+
+
+if __name__ == "__main__":
+    api = FinancialApiNewsPipeline(FINNHUB_API_KEY)
+    api.run("AAPL", "2023-03-01", "2023-03-03")

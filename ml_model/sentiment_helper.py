@@ -121,7 +121,36 @@ class SAHelper:
 
         self.kafka.send_message(KAFKA_SENTIMENT_ENDOFDAY_TOPIC, event)
 
-    
+    def eod_callback(self, record):
+        try:
+            payload = record.value
+            date_str = payload["date"]
+
+            scores = self.compute_avg_scores_for_date(date_str)
+
+            sentiment_results = []
+            for ticker, avg_score in scores.items():
+                if avg_score == 0:
+                    label = "Neutral"
+                elif avg_score > 0:
+                    label = "Positive"
+                else:
+                    label = "Negative"
+
+                sentiment_results.append({
+                    "ticker": ticker,
+                    "avg_score": round(avg_score, 4),
+                    "label": label,
+                    "date": date_str
+                })
+            self.mongodb.delete(MONGODB_COLLECTION_SENTIMENT, {"date": date_str})
+            self.mongodb.insert_many(MONGODB_COLLECTION_SENTIMENT, sentiment_results)
+            print(f"[Callback] {date_str} | inserted {len(sentiment_results)} docs")
+
+        except Exception as e:
+            print(f"[Callback-Error] {e}")
+
+
 if __name__ == "__main__":
     sa_helper = SAHelper()
     

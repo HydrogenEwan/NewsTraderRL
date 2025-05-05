@@ -18,9 +18,10 @@ class YahooOhlcPipeline(DataPipeline):
         fetcher = YahooOhlcFetcher(ticker, parser)
         mongodb = MongoDbClient()
         mongodb.delete(collection, {
+            "ticker": ticker,
             "date": {
-                "$gte": datetime.strptime(start, "%Y-%m-%d").timestamp(),
-                "$lte": datetime.strptime(end, "%Y-%m-%d").timestamp()
+                "$gte": start,
+                "$lte": end
             }
         })
 

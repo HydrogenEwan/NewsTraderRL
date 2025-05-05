@@ -1,9 +1,11 @@
 import click
 
 from common.config.db_config import MONGODB_COLLECTION_SIMULATION_OHLC, MONGODB_COLLECTION_OHLC
+from common.config.financial_news_config import FINNHUB_API_KEY
 from common.config.target_tickers import TARGET_TICKERS
+from data.financial_news.financial_api_news_pipeline import FinancialApiNewsPipeline
 from data.ohlc.yahoo_ohlc_pipeline import YahooOhlcPipeline
-
+from ml_model.sentiment_helper import SAHelper
 
 
 @click.group()
@@ -17,22 +19,22 @@ def cli():
 @click.option('--start', required=True, help='Start date (YYYY-MM-DD)')
 @click.option('--end', required=True, help='End date (YYYY-MM-DD)')
 @click.option('--issimulation', required=False, default=False)
-def run_ohlc(ticker, start, end, issimulation):
-    pipeline = YahooOhlcPipeline()
-
+def run_simulation(ticker, start, end, issimulation):
     ticker_list = TARGET_TICKERS
     ticker_list.append("^GSPC")
     ticker_list.append("^VIX")
     if ticker is not None:
         ticker_list = [t.strip() for t in ticker.split(',') if t.strip()]
 
+    pipeline = YahooOhlcPipeline()
     for t in ticker_list:
-        if issimulation:
-            print(f"[INFO] Running simulation pipeline for {t}")
-            pipeline.run_pipeline(ticker=t, start=start, end=end, collection=MONGODB_COLLECTION_SIMULATION_OHLC)
-        else:
-            print(f"[INFO] Running pipeline for {t}")
-            pipeline.run_pipeline(ticker=t, start=start, end=end, collection=MONGODB_COLLECTION_OHLC)
+        print(f"[INFO] Running simulation for MarketData {t}")
+        pipeline.run_pipeline(ticker=t, start=start, end=end, collection=MONGODB_COLLECTION_OHLC)
+
+    pipeline = FinancialApiNewsPipeline(FINNHUB_API_KEY)
+    for t in ticker_list:
+        print(f"[INFO] Running real-time pipeline for News {t}")
+        pipeline.run(t, start, end)
 
 
 @cli.command()
@@ -40,21 +42,29 @@ def run_ohlc(ticker, start, end, issimulation):
 @click.option('--start', required=True, help='Start date (YYYY-MM-DD)')
 @click.option('--end', required=True, help='End date (YYYY-MM-DD)')
 @click.option('--issimulation', required=False, default=False)
-def run_news(ticker, start, end, issimulation):
+def run_realtime(ticker, start, end, issimulation):
     ticker_list = TARGET_TICKERS
+    ticker_list.append("^GSPC")
+    ticker_list.append("^VIX")
     if ticker is not None:
         ticker_list = [t.strip() for t in ticker.split(',') if t.strip()]
+
+    pipeline = YahooOhlcPipeline()
+    for t in ticker_list:
+        print(f"[INFO] Running real-time pipeline for MarketData {t}")
+        pipeline.run_pipeline(ticker=t, start=start, end=end, collection=MONGODB_COLLECTION_OHLC)
+
+    pipeline = FinancialApiNewsPipeline(FINNHUB_API_KEY)
+    for t in ticker_list:
+        print(f"[INFO] Running real-time pipeline for News {t}")
+        pipeline.run(t, start, end)
+
 
 
 @cli.command()
-@click.option('--ticker', required=False ,help='Comma-separated ticker symbols (e.g. AAPL,MSFT)')
-@click.option('--start', required=True, help='Start date (YYYY-MM-DD)')
-@click.option('--end', required=True, help='End date (YYYY-MM-DD)')
-@click.option('--issimulation', required=False, default=False)
-def run_sec(ticker, start, end, issimulation):
-    ticker_list = TARGET_TICKERS
-    if ticker is not None:
-        ticker_list = [t.strip() for t in ticker.split(',') if t.strip()]
+def run_sentiment():
+    sentiment = SAHelper()
+    sentiment.listen_end_of_day_for_sentiment(sentiment.eod_callback)
 
 
 
