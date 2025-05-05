@@ -25,7 +25,7 @@ def main():
     ml_helper = MlModelHelper()
     
     # Initialize RL model handler
-    model_path = "ml_model/rl_model/trained_model_file/final_model.pkl"  # Path to the trained model
+    model_path = "ml_model/rl_model/trained_model_file/model_7dim_top20_output/model_file/final_model.pkl"  # Path to the trained model
     rl_handler = RLModelHandler(model_path)
     
     def end_of_day_callback(event):
@@ -66,7 +66,7 @@ if __name__ == "__main__":
     ml_helper = MlModelHelper()
     
     # Initialize RL model handler
-    model_path = "ml_model/rl_model/trained_model_file/final_model.pkl"  # Path to the trained model
+    model_path = "ml_model/rl_model/trained_model_file/model_7dim_top20_output/model_file/final_model.pkl"  # Path to the trained model
     rl_handler = RLModelHandler(model_path)
     
     def end_of_day_callback(event):

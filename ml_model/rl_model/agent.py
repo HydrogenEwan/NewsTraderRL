@@ -237,6 +237,10 @@ class RLAgent():
     def __set_test(self):
         self.actor.eval()
         self.env.set_test()
+        
+    def set_pred(self):
+        self.actor.eval()
+        self.env.set_pred()
 
     def cal_MDD(self, agent_wealth):
         denom = np.maximum.accumulate(agent_wealth, axis=-1) + EPS

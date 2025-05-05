@@ -2,6 +2,8 @@ import os
 import sys
 import json
 import torch
+from torch.serialization import add_safe_globals
+import pickle
 import numpy as np
 from datetime import datetime, timedelta
 from typing import List, Dict, Tuple
@@ -45,17 +47,13 @@ class RLModelHandler:
         except Exception as e:
             logger.error(f"Error loading adjacency matrix: {str(e)}")
             raise
-        supports = [A]
-        self.model = RLActor(supports, self.args).to(self.device)
-        self.model = torch.load(self.model_path, map_location=self.device, weights_only=False)
-        self.model.to(self.device)  # Ensure model is on the correct device
-        
-        for name, param in self.model.named_parameters():
-            print(f"{name}: {param.shape}, mean={param.data.mean():.4f}, std={param.data.std():.4f}")
 
-        print(f"Model loaded from {self.model_path}")
-        self.model.eval()  # Set to evaluation mode
-        
+        # Then load the full model
+        supports = [A]
+        actor = RLActor(supports, self.args).to(self.device)  # 必ず config から再構築
+        actor.load_state_dict(torch.load(self.model_path, map_location=self.device))
+        actor.eval()
+        self.model = actor
         # Initialize environment and agent (will be created when data is available)
         self.env = None
         self.agent = None
@@ -236,12 +234,14 @@ class RLModelHandler:
             trade_len=self.args.trade_len,
             max_steps=self.args.max_steps,
             norm_type=self.args.norm_type,
-            allow_short=True,
-            mode='test'
+            allow_short=False,
+            mode='pred'
         )
     
     def _create_agent(self, env: PortfolioEnv) -> RLAgent:
-        return RLAgent(env, self.model, self.args)
+        agent = RLAgent(env, self.model, self.args)
+        agent.set_pred()
+        return agent
     
     def process_end_of_day(self, event: EndOfDayEvent) -> None:
         """Process end of day event and save portfolio results"""
@@ -251,23 +251,19 @@ class RLModelHandler:
             
             # Fetch data from MongoDB
             stocks_data, market_data, current_returns = self._fetch_data_from_mongodb(date)
-            
+            print(f"stocks_data: {stocks_data.shape}, market_data: {market_data.shape}, current_returns: {current_returns.shape}")
             # Create environment with fetched data
             self.env = self._create_environment(stocks_data, market_data)
             
-            # Create agent
-            self.agent = self._create_agent(self.env)
             
             # Reset environment
-            states, masks = self.env.reset()
+            states = self.env.reset()
             
             # Get model prediction
             with torch.no_grad():
                 x_a = torch.from_numpy(states[0]).float().to(self.device)
-                masks = torch.from_numpy(masks).bool().to(self.device)
-                x_m = torch.from_numpy(states[1]).float().to(self.device)
-                weights, rho, _, _ = self.model(x_a, x_m, masks, deterministic=True)
-            
+                weights, rho, _, _ = self.model(x_a, None, deterministic=False)
+
             # Convert weights to numpy
             if isinstance(weights, torch.Tensor):
                 weights_np = weights[0].cpu().numpy()
@@ -277,7 +273,6 @@ class RLModelHandler:
             # Extract long and short positions
             num_assets = stocks_data.shape[0]
             long_weights = weights_np[:num_assets]
-            short_weights = weights_np[num_assets:] if len(weights_np) > num_assets else np.zeros(num_assets)
             
             # Normalize long weights to ensure they sum to 1
             long_weights_sum = np.sum(long_weights)
@@ -286,34 +281,32 @@ class RLModelHandler:
             else:
                 long_weights = np.ones(num_assets) / num_assets
             
-            # During inference, current returns should be 0 since we haven't made any trades yet
-            current_returns = np.zeros(num_assets)
-            
-            # Calculate expected return based on model's prediction
-            # The model's prediction includes future returns in its state
-            future_returns = self.env.ror[0]  # Get the first future return from the environment
-            
-            # Calculate expected returns for both long and short positions
-            long_expected_return = float(np.sum(long_weights * future_returns))
-            short_expected_return = float(np.sum(short_weights * future_returns))
-            
-            # Total expected return is the sum of long and short returns
-            expected_return = long_expected_return - short_expected_return  # Short returns are negative
             
             # Create portfolio result
             portfolio_result = PortfolioResult(
                 tickers=TARGET_TICKERS,
                 portfolio_weights=weights_np.tolist(),
-                long_ratio=float(rho[0]),
-                expected_return=expected_return,
+                long_ratio=1,
+                expected_return=None,
                 date_index=stocks_data.shape[1] - 1,
                 returns=current_returns.tolist(),  # Current returns are 0 during inference
                 date=event.date
             )
+            print(f"portfolio_result: {portfolio_result}")
             
             # Save to MongoDB
-            self.mongodb.insert_one(MONGODB_COLLECTION_PORTFOLIO, portfolio_result.to_dict())
+            # self.mongodb.insert_one(MONGODB_COLLECTION_PORTFOLIO, portfolio_result.to_dict())
             
         except Exception as e:
             print(f"Error processing end of day: {str(e)}")
             raise 
+        
+if __name__ == "__main__":
+    # Test RL model
+    print("RL MODEL TEST ==================================")
+    
+    model_path = "ml_model/rl_model/trained_model_file/model_7dim_top20_output/model_file/best_cr-34.pth"  # Path to the trained model
+    rl_handler = RLModelHandler(model_path)
+    rl_handler.process_end_of_day(EndOfDayEvent(date="2000-09-04", source="unit_test"))
+    
+    print("Test complete.")
