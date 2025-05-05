@@ -99,7 +99,13 @@ class MlModelHelper:
         self.kafka.listen(KAFKA_SENTIMENT_ENDOFDAY_TOPIC, callback)
 
     def listen_end_of_day_for_rl(self, callback):
-        self.kafka.listen(KAFKA_RL_ENDOFDAY_TOPIC, callback)
+        self.rl_callback = callback
+        self.kafka.listen(KAFKA_RL_ENDOFDAY_TOPIC, self.change_kafka_message_to_end_of_day)
+
+    def change_kafka_message_to_end_of_day(self, msg):
+        payload = msg.value
+        eod = EndOfDayEvent.from_raw(payload)
+        self.rl_callback(eod)
 
     def send_end_of_day_to_sentiment(self, date_str: str, source="end_of_day_handler"):
         try:

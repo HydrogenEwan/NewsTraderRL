@@ -34,7 +34,7 @@ def run_simulation(ticker, start, end, issimulation):
 
     pipeline = FinancialApiNewsPipeline(FINNHUB_API_KEY)
     for t in ticker_list:
-        print(f"[INFO] Running real-time pipeline for News {t}")
+        print(f"[INFO] Running simulation pipeline for News {t}")
         pipeline.run(t, start, end)
 
     helper = MlModelHelper()

@@ -278,16 +278,16 @@ class RLModelHandler:
                 tickers=TARGET_TICKERS,
                 portfolio_weights=weights_np.tolist(),
                 long_ratio=1,
-                expected_return=None,
+                expected_return=0.0,
                 date_index=stocks_data.shape[1] - 1,
-                returns=None,
+                returns=[],
                 date=event.date
             )
             
             # Save to MongoDB
-            # self.mongodb.insert_one(MONGODB_COLLECTION_PORTFOLIO, portfolio_result.to_dict())
-            return portfolio_result
-            
+            self.mongodb.delete(MONGODB_COLLECTION_PORTFOLIO, {"date": event.date.strftime("%Y-%m-%d")})
+            self.mongodb.insert(MONGODB_COLLECTION_PORTFOLIO, portfolio_result.to_dict())
+
         except Exception as e:
             print(f"Error processing end of day: {str(e)}")
             raise 

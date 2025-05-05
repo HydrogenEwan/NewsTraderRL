@@ -36,7 +36,7 @@ class KafkaClient:
                 for tp, msgs in records.items():
                     for msg in msgs:
                         try:
-                            print(f"[INFO](KAFKA) Receiving message from topic {tp}: {msg}")
+                            print(f"[INFO](KAFKA) Receiving message from topic {tp}")
                             callback(msg)
                         except Exception as e:
                             print(f"Error in callback: {e}")
