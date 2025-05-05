@@ -431,6 +431,12 @@ class PortfolioEnv(object):
                                  in_features=in_features, val_idx=val_idx, test_idx=test_idx,
                                  batch_size=batch_size, max_steps=max_steps, norm_type=norm_type,
                                  window_len=window_len, trade_len=trade_len, mode=mode, allow_short=allow_short)
+        if mode == 'test':
+            self.src.test()
+        elif mode == 'val':
+            self.src.val()
+        else:
+            self.src.train()
 
         self.sim = PortfolioSim(num_assets=self.num_assets, fee=fee, time_cost=time_cost, allow_short=allow_short)
 

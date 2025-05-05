@@ -419,6 +419,15 @@ def run(func_args):
                     writer.add_scalar('Test/ASR', metrics['ASR'], global_step=epoch)
                     writer.add_scalar('Test/SoR', metrics['DDR'], global_step=epoch)
                     writer.add_scalar('Test/CR', metrics['CR'], global_step=epoch)
+
+                    agent_wealth_random = agent.evaluation_random_portfolio()
+                    metrics_random = calculate_metrics(agent_wealth_random, func_args.trade_mode)
+                    writer.add_scalar('TEST(Random Portfolio)/APR', metrics_random['APR'], global_step=epoch)
+                    writer.add_scalar('TEST(Random Portfolio)/MDD', metrics_random['MDD'], global_step=epoch)
+                    writer.add_scalar('TEST(Random Portfolio)/AVOL', metrics_random['AVOL'], global_step=epoch)
+                    writer.add_scalar('TEST(Random Portfolio)/ASR', metrics_random['ASR'], global_step=epoch)
+                    writer.add_scalar('TEST(Random Portfolio)/SoR', metrics_random['DDR'], global_step=epoch)
+                    writer.add_scalar('TEST(Random Portfolio)/CR', metrics_random['CR'], global_step=epoch)
                     
                     # Update the progress bar with metrics
                     epoch_pbar.set_postfix({
@@ -430,7 +439,7 @@ def run(func_args):
                     if metrics['CR'].item() > max_cr:
                         logger.info('New Best CR Policy!!!!')
                         max_cr = metrics['CR'].item()
-                        torch.save(actor, os.path.join(model_save_dir, 'best_cr-'+str(epoch)+'.pkl'))
+                        torch.save(actor.state_dict(), os.path.join(model_save_dir, 'best_cr-'+str(epoch)+'.pth'))
 
                     print_memory_usage(f"End of epoch {epoch}") #debugging code for GPU
                     logger.info(f"[run.py] Allocated: {torch.cuda.memory_allocated() / 1024**3:.2f} GB, Reserved: {torch.cuda.memory_reserved() / 1024**3:.2f} GB")
@@ -454,7 +463,7 @@ def run(func_args):
                                    ))
             except KeyboardInterrupt:
                 logger.info("Training interrupted by user. Saving model...")
-                torch.save(actor, os.path.join(model_save_dir, 'final_model.pkl'))
+                torch.save(actor.state_dict(), os.path.join(model_save_dir, 'final_model.pth'))
                 torch.save(agent.optimizer.state_dict(), os.path.join(model_save_dir, 'final_optimizer.pkl'))
         except Exception as e:
             logger.error(f"Error during training: {str(e)}")
