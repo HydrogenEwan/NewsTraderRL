@@ -67,7 +67,8 @@ class RLModelHandler:
             
             # Get start and end dates for the window
             end_date = datetime.strptime(date, "%Y-%m-%d")
-            start_date = end_date - timedelta(days=window_size)
+            delta_days = window_size * 2
+            start_date = end_date - timedelta(days=delta_days)
             
             # Initialize data structures
             num_assets = len(TARGET_TICKERS)
@@ -102,10 +103,13 @@ class RLModelHandler:
                         'sentiment': 0.0,
                         'sec_score': 0.0
                     })
-            
             # Sort dates and create date index mapping
             all_dates = sorted(list(all_dates))
-            date_to_idx = {date: idx for idx, date in enumerate(all_dates)}
+            if len(all_dates) >= window_size:
+                selected_dates = all_dates[-window_size:]
+            else:
+                logger.warning(f"Not enough data for {ticker}. Expected {window_size} days, got {len(all_dates)} days")
+            date_to_idx = {date: idx for idx, date in enumerate(selected_dates)}
             
             # Get sentiment and SEC scores
             sentiment_cache = {}
@@ -153,16 +157,17 @@ class RLModelHandler:
             # Fill stock data array
             for i, ticker in enumerate(TARGET_TICKERS):
                 for data_point in stock_data_dict[ticker]:
-                    idx = date_to_idx[data_point['date']]
-                    stocks_data[i, idx] = [
-                        data_point['close'],
-                        data_point['high'],
-                        data_point['low'],
-                        data_point['volume'],
-                        data_point['marketcap'],
-                        data_point['sentiment'],
-                        data_point['sec_score']
-                    ]
+                    if data_point['date'] in date_to_idx:
+                        idx = date_to_idx[data_point['date']]
+                        stocks_data[i, idx] = [
+                            data_point['close'],
+                            data_point['high'],
+                            data_point['low'],
+                            data_point['volume'],
+                            data_point['marketcap'],
+                            data_point['sentiment'],
+                            data_point['sec_score']
+                        ]
             
             # Fetch market data
             market_query = {
@@ -176,6 +181,7 @@ class RLModelHandler:
             market_data_dict = {}
             for doc in market_docs:
                 date = doc['date']
+                
                 if date in date_to_idx:
                     market_data_dict[date] = {
                         'close': doc['close'],
@@ -289,13 +295,13 @@ class RLModelHandler:
                 long_ratio=1,
                 expected_return=None,
                 date_index=stocks_data.shape[1] - 1,
-                returns=current_returns.tolist(),  # Current returns are 0 during inference
+                returns=None,
                 date=event.date
             )
-            print(f"portfolio_result: {portfolio_result}")
             
             # Save to MongoDB
             # self.mongodb.insert_one(MONGODB_COLLECTION_PORTFOLIO, portfolio_result.to_dict())
+            return portfolio_result
             
         except Exception as e:
             print(f"Error processing end of day: {str(e)}")
@@ -307,6 +313,7 @@ if __name__ == "__main__":
     
     model_path = "ml_model/rl_model/trained_model_file/model_7dim_top20_output/model_file/best_cr-34.pth"  # Path to the trained model
     rl_handler = RLModelHandler(model_path)
-    rl_handler.process_end_of_day(EndOfDayEvent(date="2000-09-04", source="unit_test"))
+    portfolio_result = rl_handler.process_end_of_day(EndOfDayEvent(date="2000-09-04", source="unit_test"))
+    print(f"portfolio_result: {portfolio_result}")
     
     print("Test complete.")

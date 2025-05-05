@@ -143,6 +143,7 @@ class DataGenerator():
             obs = self._fillna(obs, obs_masks)
             obs_normed = self.__normalize_assets(obs, obs_masks)
             market_obs_normed = self.__normalize_market(market_obs) if self.allow_short else None
+            obs, obs_normed = obs.astype(np.float32), obs_normed.astype(np.float32)
             done = False
             return obs, obs_normed, market_obs, market_obs_normed, None, None, done
         
@@ -215,7 +216,7 @@ class DataGenerator():
         Use only past observations to current time (no future access).
         """
         idx = self.test_idx  # current day
-        raw_states = self.__assets_data[:, idx - (self.window_len + 1) * 5 + 1:idx + 1]  # shape: [assets, time, feat]
+        raw_states = self.__assets_data[:, idx - (self.window_len + 1) * 5 :idx + 1]  # shape: [assets, time, feat]
         tmp_states = raw_states.reshape(self.__assets_data.shape[0], self.window_len + 1, 5, -1)
 
         assets_states = np.zeros((1, self.__assets_data.shape[0], self.window_len, self.assets_features))
