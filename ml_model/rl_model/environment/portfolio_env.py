@@ -19,6 +19,7 @@ class DataGenerator():
                  batch_size,
                  val_mode=False,
                  test_mode=False,
+                 pred_mode=False,
                  max_steps=12,
                  norm_type='div-last',
                  window_len=20,
@@ -57,7 +58,7 @@ class DataGenerator():
 
         self.__org_assets_data[:, :, 0] = price
         raw_ror = price[:, 1:] / (price[:, :-1] + EPS) - 1.0                 # [num_assets, T-1]
-        # prepend a “zero return” (or NaN, if you’d prefer to mask it out)
+        # prepend a "zero return" (or NaN, if you'd prefer to mask it out)
         pad     = np.zeros((price.shape[0], 1), dtype=raw_ror.dtype)        
         ror     = np.concatenate([pad, raw_ror], axis=1)                     # [num_assets, T]
         self.__ror_data = ror.astype(np.float32)
@@ -136,6 +137,16 @@ class DataGenerator():
             self.cursor = self.tmp_order[:min(self.batch_size, len(self.tmp_order))]
             self.tmp_order = self.tmp_order[min(self.batch_size, len(self.tmp_order)):]
 
+        if self.pred_mode:
+            obs, market_obs = self._get_data_predict()
+            obs_masks = np.isnan(obs[:, :, -1, 0])
+            obs = self._fillna(obs, obs_masks)
+            obs_normed = self.__normalize_assets(obs, obs_masks)
+            market_obs_normed = self.__normalize_market(market_obs) if self.allow_short else None
+            obs, obs_normed = obs.astype(np.float32), obs_normed.astype(np.float32)
+            done = False
+            return obs, obs_normed, market_obs, market_obs_normed, None, None, done
+        
         obs, market_obs, future_return, past_return = self._get_data()
         obs_masks, future_return_masks = self._get_masks(obs, future_return)
         trade_masks = np.logical_or(obs_masks, future_return_masks)
@@ -198,6 +209,38 @@ class DataGenerator():
             
         assets_states = np.nan_to_num(assets_states, nan=0.0, posinf=0.0, neginf=0.0)
         return assets_states, market_states, future_return, past_return
+
+    #for prediction
+    def _get_data_predict(self):
+        """
+        Use only past observations to current time (no future access).
+        """
+        idx = self.__assets_data  # current day
+        raw_states = self.__assets_data[:, :, -self.window_len * 5:]
+        tmp_states = raw_states.reshape(self.__assets_data.shape[0], self.window_len, 5, -1)
+
+        assets_states = np.zeros((1, self.__assets_data.shape[0], self.window_len, self.assets_features))
+
+        # Calculate returns and pad with 1.0 for the first period
+        returns = tmp_states[:, 1:, -1, 0] / tmp_states[:, :-1, -1, 0]
+        assets_states[0, :, 1:, 0] = returns  # Start from index 1 to leave first period as 0
+        assets_states[0, :, 0, 0] = 1.0  # Set first period to 1.0
+
+        assets_states[0, :, :, 1] = np.nanmax(tmp_states[:, :, :, 1], axis=-1) / tmp_states[:, :, -1, 0]
+        assets_states[0, :, :, 2] = np.nanmin(tmp_states[:, :, :, 2], axis=-1) / tmp_states[:, :, -1, 0]
+        assets_states[0, :, :, 3] = np.nansum(tmp_states[:, :, :, 3], axis=-1)
+        assets_states[0, :, :, 4] = np.nanmean(tmp_states[:, :, :, 4], axis=-1)
+        if tmp_states.shape[-1] == 7:
+            assets_states[0, :, :, 5] = np.nansum(tmp_states[:, :, :, 5], axis=-1)
+            assets_states[0, :, :, 6] = np.nanmean(tmp_states[:, :, :, 6], axis=-1)
+
+        if self.allow_short:
+            tmp_market = self.__market_data[idx - (self.window_len) * 5 + 1:idx + 1].reshape(self.window_len, 5, -1)
+            market_states = np.mean(tmp_market, axis=1)[None, ...]
+        else:
+            market_states = None
+
+        return np.nan_to_num(assets_states, nan=0.0, posinf=0.0, neginf=0.0), market_states
 
     def _fillna(self, obs, masks):
         """
@@ -267,12 +310,17 @@ class DataGenerator():
     def eval(self):
         self.val_mode = True
         self.test_mode = False
-
+        self.pred_mode = False
     def test(self):
         self.test_mode = True
         self.val_mode = False
-
+        self.pred_mode = False
     def train(self):
+        self.test_mode = False
+        self.val_mode = False
+        self.pred_mode = False
+    def pred(self):
+        self.pred_mode = True
         self.test_mode = False
         self.val_mode = False
 
@@ -421,6 +469,7 @@ class PortfolioEnv(object):
         self.trade_len = trade_len
         self.val_mode = False
         self.test_mode = False
+        self.pred_mode = False
         self.is_norm = is_norm
         self.val_idx = val_idx
         self.test_idx = test_idx
@@ -437,6 +486,15 @@ class PortfolioEnv(object):
             self.src.val()
         else:
             self.src.train()
+
+        if mode == 'test':
+            self.set_test()
+        elif mode == 'val':
+            self.set_eval()
+        elif mode == 'pred':
+            self.set_pred()
+        else:
+            self.set_train()
 
         self.sim = PortfolioSim(num_assets=self.num_assets, fee=fee, time_cost=time_cost, allow_short=allow_short)
 
@@ -459,6 +517,11 @@ class PortfolioEnv(object):
 
     def reset(self):
         self.infos = []
+        if self.mode == 'pred':
+            obs, obs_normed, market_obs, market_obs_normed, _, _, _ = self.src.reset()
+            self.sim.reset(obs.shape[0])
+            return [obs_normed, market_obs_normed] if self.is_norm else [obs, market_obs]
+        
         obs, obs_normed, market_obs, market_obs_normed, future_ror, trade_masks, done = self.src.reset()
         self.sim.reset(obs.shape[0])
         self.ror = future_ror
@@ -475,3 +538,6 @@ class PortfolioEnv(object):
 
     def set_train(self):
         self.src.train()
+
+    def set_pred(self):
+        self.src.pred()

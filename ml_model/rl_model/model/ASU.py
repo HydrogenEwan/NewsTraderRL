@@ -265,5 +265,6 @@ class ASU(nn.Module):
         x = self.bn1(self.sagcn(inputs))
         x = self.linear1(x).squeeze(-1)
         score = 1 / ((-x).exp() + 1)
-        score[mask] = -math.inf
+        if mask is not None:
+            score[mask] = -math.inf
         return score

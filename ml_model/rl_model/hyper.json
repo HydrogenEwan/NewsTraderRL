@@ -21,7 +21,7 @@
         7,
         5
     ],
-    "G": 20,
+    "G":10,
     "mode": "train",
     "num_rounds": 80000,
     "max_grad_norm": 100.0,
