@@ -1,6 +1,6 @@
 import time
 import threading
-from datetime import date
+from datetime import date, datetime, timedelta
 import random
 import logging
 
@@ -101,9 +101,14 @@ class MlModelHelper:
     def listen_end_of_day_for_rl(self, callback):
         self.kafka.listen(KAFKA_RL_ENDOFDAY_TOPIC, callback)
 
-    def send_end_of_day_to_sentiment(self, source="end_of_day_handler"):
+    def send_end_of_day_to_sentiment(self, date_str: str, source="end_of_day_handler"):
+        try:
+            parsed_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+        except ValueError:
+            raise ValueError(f"Invalid date string '{date_str}'. Expected format: YYYY-MM-DD")
+
         event = EndOfDayEvent(
-            date=date.today(),
+            date=parsed_date,
             source=source
         )
 

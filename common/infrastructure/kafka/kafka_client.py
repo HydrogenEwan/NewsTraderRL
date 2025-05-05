@@ -36,6 +36,7 @@ class KafkaClient:
                 for tp, msgs in records.items():
                     for msg in msgs:
                         try:
+                            print(f"[INFO](KAFKA) Receiving message from topic {tp}: {msg}")
                             callback(msg)
                         except Exception as e:
                             print(f"Error in callback: {e}")
@@ -61,7 +62,7 @@ class KafkaClient:
                 bootstrap_servers=self.bootstrap_servers,
                 value_serializer=serializer
             )
-        print(sending_message := f"Sending message to topic {topic}: {message}")
+        print(sending_message := f"[INFO](KAFKA) Sending message to topic {topic}: {message}")
         producer = self.producers[topic]
         future = producer.send(topic, value=message)
         try:

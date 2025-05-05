@@ -1,12 +1,12 @@
 import time
 import threading
-from datetime import date
+from datetime import date, datetime
 from typing import List, Tuple, Dict
 from collections import defaultdict 
 
 from common.config.target_tickers import TARGET_TICKERS
 from common.config.db_config import MONGODB_COLLECTION_NEWS, MONGODB_COLLECTION_SENTIMENT
-from common.config.kafka_config import KAFKA_SENTIMENT_ENDOFDAY_TOPIC
+from common.config.kafka_config import KAFKA_SENTIMENT_ENDOFDAY_TOPIC, KAFKA_RL_ENDOFDAY_TOPIC
 from common.model.end_of_day import EndOfDayEvent
 from common.model.financial_news import FinancialNews
 from common.model.sentiment_result import SentimentResult
@@ -121,6 +121,19 @@ class SAHelper:
 
         self.kafka.send_message(KAFKA_SENTIMENT_ENDOFDAY_TOPIC, event)
 
+    def send_end_of_day_to_rl(self, date_str: str, source="sentiment"):
+        try:
+            parsed_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+        except ValueError:
+            raise ValueError(f"Invalid date string '{date_str}'. Expected format: YYYY-MM-DD")
+
+        event = EndOfDayEvent(
+            date=parsed_date,
+            source=source
+        )
+
+        self.kafka.send_message(KAFKA_RL_ENDOFDAY_TOPIC, event)
+
     def eod_callback(self, record):
         try:
             payload = record.value
@@ -145,10 +158,13 @@ class SAHelper:
                 })
             self.mongodb.delete(MONGODB_COLLECTION_SENTIMENT, {"date": date_str})
             self.mongodb.insert_many(MONGODB_COLLECTION_SENTIMENT, sentiment_results)
-            print(f"[Callback] {date_str} | inserted {len(sentiment_results)} docs")
+            print(f"[INFO] {date_str} | sentiment inserted {len(sentiment_results)}")
+
+            self.send_end_of_day_to_rl(date_str)
+            print(f"[INFO] {date_str} | sentiment result sent to RL Model")
 
         except Exception as e:
-            print(f"[Callback-Error] {e}")
+            print(f"[ERROR] (Callback-Error) {e}")
 
 
 if __name__ == "__main__":
