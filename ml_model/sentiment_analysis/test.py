@@ -1,7 +1,7 @@
 import json
 import logging
 from collections import defaultdict
-from processing.analyzer import process_text_batch
+from ml_model.sentiment_analysis.analyzer import process_text_batch
 
 logging.basicConfig(
     level=logging.INFO,

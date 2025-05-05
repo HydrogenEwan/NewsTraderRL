@@ -3,7 +3,7 @@ import logging
 from collections import defaultdict
 
 from common.config.target_tickers import TARGET_TICKERS
-from ml_model.sentiment_analysis.processing.analyzer import process_text_batch
+from ml_model.sentiment_analysis.analyzer import process_text_batch
 from ml_model.ml_model_helper import MlModelHelper
 
 logging.basicConfig(
