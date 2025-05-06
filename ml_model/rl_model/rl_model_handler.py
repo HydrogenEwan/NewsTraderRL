@@ -285,6 +285,7 @@ class RLModelHandler:
             # Save to MongoDB
             self.mongodb.delete(MONGODB_COLLECTION_PORTFOLIO, {"date": event.date.strftime("%Y-%m-%d")})
             self.mongodb.insert(MONGODB_COLLECTION_PORTFOLIO, portfolio_result.to_dict())
+            print(f"[INFO] Portfolio processed for {date}")
 
         except Exception as e:
             print(f"Error processing end of day: {str(e)}")
