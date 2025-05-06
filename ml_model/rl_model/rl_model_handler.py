@@ -282,7 +282,6 @@ class RLModelHandler:
                 returns=[],
                 date=event.date
             )
-            
             # Save to MongoDB
             self.mongodb.delete(MONGODB_COLLECTION_PORTFOLIO, {"date": event.date.strftime("%Y-%m-%d")})
             self.mongodb.insert(MONGODB_COLLECTION_PORTFOLIO, portfolio_result.to_dict())
