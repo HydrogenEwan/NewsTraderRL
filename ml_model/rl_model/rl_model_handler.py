@@ -50,7 +50,7 @@ class RLModelHandler:
 
         # Then load the full model
         supports = [A]
-        actor = RLActor(supports, self.args).to(self.device)  # 必ず config から再構築
+        actor = RLActor(supports, self.args).to(self.device)
         actor.load_state_dict(torch.load(self.model_path, map_location=self.device))
         actor.eval()
         self.model = actor
@@ -63,7 +63,7 @@ class RLModelHandler:
         logger = logging.getLogger()
         try:
             # Calculate the required window size
-            window_size = (self.args.window_len) * 5  # Same as in DataGenerator._get_data
+            window_size = (self.args.window_len + 1) * 5  # Same as in DataGenerator._get_data
             
             # Get start and end dates for the window
             end_date = datetime.strptime(date, "%Y-%m-%d")
@@ -248,7 +248,7 @@ class RLModelHandler:
             self.env = self._create_environment(stocks_data, market_data)
             
             # Reset environment
-            states = self.env.reset()\
+            states = self.env.reset()
             
             # Get model prediction
             with torch.no_grad():
@@ -272,11 +272,10 @@ class RLModelHandler:
             else:
                 long_weights = np.ones(num_assets) / num_assets
             
-            
             # Create portfolio result
             portfolio_result = PortfolioResult(
                 tickers=TARGET_TICKERS,
-                portfolio_weights=weights_np.tolist(),
+                portfolio_weights=long_weights.tolist(),
                 long_ratio=1,
                 expected_return=0.0,
                 date_index=stocks_data.shape[1] - 1,
@@ -298,7 +297,7 @@ if __name__ == "__main__":
     
     model_path = "ml_model/rl_model/trained_model_file/model_7dim_top20_output/model_file/best_cr-34.pth"  # Path to the trained model
     rl_handler = RLModelHandler(model_path)
-    portfolio_result = rl_handler.process_end_of_day(EndOfDayEvent(date="2000-09-04", source="unit_test"))
+    portfolio_result = rl_handler.process_end_of_day(EndOfDayEvent(date="2010-09-04", source="unit_test"))
     print(f"portfolio_result: {portfolio_result}")
     
     print("Test complete.")

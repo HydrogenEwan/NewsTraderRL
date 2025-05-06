@@ -51,8 +51,8 @@ class DataGenerator():
         for i in range(price.shape[0]):
             # pandas approach:
             df = pd.DataFrame(price[i, :])
-            df.fillna(method='ffill', inplace=True)
-            df.fillna(method='bfill', inplace=True)
+            df.ffill(inplace=True)
+            df.bfill(inplace=True)
             price[i, :] = df.values.flatten()
         
 
@@ -215,28 +215,26 @@ class DataGenerator():
         """
         Use only past observations to current time (no future access).
         """
-        idx = self.__assets_data  # current day
-        raw_states = self.__assets_data[:, :, -self.window_len * 5:]
-        tmp_states = raw_states.reshape(self.__assets_data.shape[0], self.window_len, 5, -1)
-
+        raw_states = self.__assets_data[:, :].copy()
+        
+        # [num_assets, (window_len + 1), 5, features]
+        tmp_states = raw_states.reshape(self.__assets_data.shape[0], self.window_len + 1, 5, -1)
+        
+        # [batch size, num_assets, window_len, features]
         assets_states = np.zeros((1, self.__assets_data.shape[0], self.window_len, self.assets_features))
 
-        # Calculate returns and pad with 1.0 for the first period
-        returns = tmp_states[:, 1:, -1, 0] / tmp_states[:, :-1, -1, 0]
-        assets_states[0, :, 1:, 0] = returns  # Start from index 1 to leave first period as 0
-        assets_states[0, :, 0, 0] = 1.0  # Set first period to 1.0
-
-        assets_states[0, :, :, 1] = np.nanmax(tmp_states[:, :, :, 1], axis=-1) / tmp_states[:, :, -1, 0]
-        assets_states[0, :, :, 2] = np.nanmin(tmp_states[:, :, :, 2], axis=-1) / tmp_states[:, :, -1, 0]
-        assets_states[0, :, :, 3] = np.nansum(tmp_states[:, :, :, 3], axis=-1)
-        assets_states[0, :, :, 4] = np.nanmean(tmp_states[:, :, :, 4], axis=-1)
+        assets_states[0, :, :, 0] = tmp_states[:, 1:, -1, 0] / (tmp_states[:, :-1, -1, 0] + EPS)
+        assets_states[0, :, :, 1] = np.nanmax(tmp_states[:, 1:, :, 1], axis=-1) / (tmp_states[:, 1:, -1, 0] + EPS)
+        assets_states[0, :, :, 2] = np.nanmin(tmp_states[:, 1:, :, 2], axis=-1) / (tmp_states[:, 1:, -1, 0] + EPS)
+        assets_states[0, :, :, 3] = np.nansum(tmp_states[:, 1:, :, 3], axis=-1)
+        assets_states[0, :, :, 4] = np.nanmean(tmp_states[:, 1:, :, 4], axis=-1)
         if tmp_states.shape[-1] == 7:
-            assets_states[0, :, :, 5] = np.nansum(tmp_states[:, :, :, 5], axis=-1)
-            assets_states[0, :, :, 6] = np.nanmean(tmp_states[:, :, :, 6], axis=-1)
+            assets_states[0, :, :, 5] = np.nansum(tmp_states[:, 1:, :, 5], axis=-1)
+            assets_states[0, :, :, 6] = np.nanmean(tmp_states[:, 1:, :, 6], axis=-1)
 
         if self.allow_short:
-            tmp_market = self.__market_data[idx - (self.window_len) * 5 + 1:idx + 1].reshape(self.window_len, 5, -1)
-            market_states = np.mean(tmp_market, axis=1)[None, ...]
+            market_states = np.zeros((1, self.window_len, self.market_features))
+            market_states[:, :, :] = np.mean(tmp_states[:, :, :, :], axis=2)
         else:
             market_states = None
 
