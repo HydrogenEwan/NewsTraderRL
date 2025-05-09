@@ -75,15 +75,15 @@ class PortfolioResult(DailyBasisModel):
         try:
             idx = self.tickers.index(ticker)
             return self.round_and_adjust()[idx]
-        except ValueError:
-            return None
+        except Exception:
+            return 0
 
     def get_return_by_ticker(self, ticker: str) -> Optional[float]:
         try:
             idx = self.tickers.index(ticker)
             return round(self.returns[idx], 6)
-        except ValueError:
-            return None
+        except Exception:
+            return 0
 
 class PortfolioResults:
     def __init__(self):

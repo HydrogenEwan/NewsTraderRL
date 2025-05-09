@@ -1,12 +1,24 @@
 import click
 from datetime import datetime, timedelta
 
-from common.config.db_config import MONGODB_COLLECTION_SIMULATION_OHLC, MONGODB_COLLECTION_OHLC
+from common.config.db_config import MONGODB_COLLECTION_SIMULATION_OHLC, MONGODB_COLLECTION_OHLC, MONGODB_COLLECTION_SEC, \
+    MONGODB_COLLECTION_SENTIMENT, MONGODB_COLLECTION_PORTFOLIO, MONGODB_COLLECTION_NEWS
 from common.config.financial_news_config import FINNHUB_API_KEY
 from common.config.target_tickers import TARGET_TICKERS
 from data.financial_news.financial_api_news_pipeline import FinancialApiNewsPipeline
+from data.ohlc.polygon_ohlc_pipeline import PolygonOhlcPipeline
 from data.ohlc.yahoo_ohlc_pipeline import YahooOhlcPipeline
 from ml_model.ml_model_helper import MlModelHelper
+
+
+def delete(start, end):
+    from common.infrastructure.mongodb.mongodb_client import MongoDbClient
+    mongodb = MongoDbClient()
+    mongodb.delete(MONGODB_COLLECTION_OHLC, {"date": {"$gte": start, "$lte": end}})
+    mongodb.delete(MONGODB_COLLECTION_SEC, {"date": {"$gte": start, "$lte": end}})
+    mongodb.delete(MONGODB_COLLECTION_NEWS, {"date": {"$gte": start, "$lte": end}})
+    mongodb.delete(MONGODB_COLLECTION_SENTIMENT, {"date": {"$gte": start, "$lte": end}})
+    mongodb.delete(MONGODB_COLLECTION_PORTFOLIO, {"date": {"$gte": start, "$lte": end}})
 
 
 @click.group()
@@ -21,13 +33,14 @@ def cli():
 @click.option('--end', required=True, help='End date (YYYY-MM-DD)')
 @click.option('--issimulation', required=False, default=False)
 def run_simulation(ticker, start, end, issimulation):
+    delete(start, end)
     ticker_list = TARGET_TICKERS
     ticker_list.append("^GSPC")
     ticker_list.append("^VIX")
     if ticker is not None:
         ticker_list = [t.strip() for t in ticker.split(',') if t.strip()]
 
-    pipeline = YahooOhlcPipeline()
+    pipeline = PolygonOhlcPipeline()
     for t in ticker_list:
         print(f"[INFO] Running simulation for MarketData {t}")
         pipeline.run_pipeline(ticker=t, start=start, end=end, collection=MONGODB_COLLECTION_OHLC)
@@ -53,13 +66,14 @@ def run_simulation(ticker, start, end, issimulation):
 @click.option('--end', required=True, help='End date (YYYY-MM-DD)')
 @click.option('--issimulation', required=False, default=False)
 def run_realtime(ticker, start, end, issimulation):
+    delete(start, end)
     ticker_list = TARGET_TICKERS
     ticker_list.append("^GSPC")
     ticker_list.append("^VIX")
     if ticker is not None:
         ticker_list = [t.strip() for t in ticker.split(',') if t.strip()]
 
-    pipeline = YahooOhlcPipeline()
+    pipeline = PolygonOhlcPipeline()
     for t in ticker_list:
         print(f"[INFO] Running real-time pipeline for MarketData {t}")
         pipeline.run_pipeline(ticker=t, start=start, end=end, collection=MONGODB_COLLECTION_OHLC)
@@ -69,6 +83,12 @@ def run_realtime(ticker, start, end, issimulation):
         print(f"[INFO] Running real-time pipeline for News {t}")
         pipeline.run(t, start, end)
 
+
+@cli.command()
+@click.option('--start', required=True, help='Start date (YYYY-MM-DD)')
+@click.option('--end', required=True, help='End date (YYYY-MM-DD)')
+def run_delete(start, end):
+    delete(start, end)
 
 
 @cli.command()
@@ -86,6 +106,7 @@ def run_rl():
 
     ml_helper = MlModelHelper()
     ml_helper.listen_end_of_day_for_rl(rl_handler.process_end_of_day)
+
 
 
 if __name__ == '__main__':

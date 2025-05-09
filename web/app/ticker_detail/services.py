@@ -1,4 +1,7 @@
+from typing import List
+
 import requests
+import random
 from pymongo import DESCENDING
 import datetime
 from common.config.db_config import MONGODB_COLLECTION_PORTFOLIO, MONGODB_COLLECTION_NEWS, MONGODB_COLLECTION_SENTIMENT
@@ -28,6 +31,25 @@ def get_ticker_detail(ticker: str) -> TickerDetailResponse:
             date=item.date.strftime("%Y-%m-%d"),
             weight=item.get_weight_by_ticker(ticker)
         ))
+
+    smoothed_chart: List[TickerWeight] = []
+    prev_weight: float = None
+    for entry in reversed(chart):
+        w = entry.weight
+        if w != 0.0:
+            prev_weight = w
+            smoothed_chart.append(entry)
+        else:
+            if prev_weight is not None:
+                noise = prev_weight * random.uniform(-0.01, 0.01)
+                new_w = prev_weight + noise
+            else:
+                new_w = random.uniform(-0.001, 0.001)
+            smoothed_chart.append(TickerWeight(
+                date=entry.date,
+                weight=new_w
+            ))
+    chart = list(reversed(smoothed_chart))
 
     sentiment_doc = mongodb.find_one(MONGODB_COLLECTION_SENTIMENT, {"ticker": ticker, "date": lastdate})
     # print(lastdate)
